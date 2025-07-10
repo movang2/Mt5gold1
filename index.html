@@ -205,7 +205,7 @@
         </div>
 
         <div class="panel">
-            <div class="panel-title">Biểu Đồ Số Dư Theo Thời Gian</div>
+            <div class="panel-title">Biểu Đồ Số Dư & Giá Vàng</div>
             <div class="chart-container">
                 <canvas id="balanceChart" height="300"></canvas>
             </div>
@@ -245,7 +245,7 @@
         let tpSound = new Audio('https://www.soundjay.com/buttons/button-09.mp3');
         let slSound = new Audio('https://www.soundjay.com/buttons/button-10.mp3');
 
-        // Khởi tạo biểu đồ giá
+        // Khởi tạo biểu đồ giá và số dư
         function initChart() {
             const ctx = document.getElementById('priceChart').getContext('2d');
             chart = new Chart(ctx, {
@@ -503,7 +503,7 @@
             }
         }
 
-        // Đóng lệnh (nâng cấp để ghi nhận lịch sử số dư)
+        // Đóng lệnh (nâng cấp để lưu giá vàng)
         function closeTrade(trade, closePrice, reason) {
             const profit = trade.type === 'BUY'
                 ? (closePrice - trade.entryPrice) * trade.lotSize * trade.leverage
@@ -517,7 +517,7 @@
             virtualBalance += profit;
             tradesToday++;
             
-            // Ghi nhận lịch sử số dư
+            // Ghi nhận lịch sử số dư với giá vàng
             balanceHistory.push({
                 time: new Date(),
                 balance: virtualBalance,
@@ -526,6 +526,7 @@
                 type: trade.type,
                 entryPrice: trade.entryPrice,
                 closePrice: closePrice,
+                goldPrice: currentPrice, // Lưu giá vàng tại thời điểm đóng lệnh
                 lotSize: trade.lotSize
             });
 
@@ -558,7 +559,7 @@
             );
         }
 
-        // Phân tích hiệu suất (từ ý tưởng gốc)
+        // Phân tích hiệu suất (nâng cấp để hiển thị tỷ lệ lợi nhuận so với giá vàng)
         function analyzeBalanceHistory() {
             if (!balanceHistory || balanceHistory.length === 0) {
                 alert("Không có dữ liệu giao dịch!");
@@ -567,31 +568,43 @@
 
             let max = balanceHistory[0];
             let min = balanceHistory[0];
+            let totalProfit = 0;
+            let totalGoldPrice = 0;
+            let tradesCount = balanceHistory.length;
 
             balanceHistory.forEach(item => {
                 if (item.balance > max.balance) max = item;
                 if (item.balance < min.balance) min = item;
+                totalProfit += item.profit;
+                totalGoldPrice += item.goldPrice;
             });
 
             const first = balanceHistory[0];
             const maxDuration = ((new Date(max.time) - new Date(first.time)) / 1000).toFixed(0);
             const minDuration = ((new Date(min.time) - new Date(first.time)) / 1000).toFixed(0);
+            const avgProfit = (totalProfit / tradesCount).toFixed(2);
+            const avgGoldPrice = (totalGoldPrice / tradesCount).toFixed(2);
+            const profitToGoldRatio = ((totalProfit / tradesCount) / avgGoldPrice * 100).toFixed(2); // Tỷ lệ lợi nhuận trung bình so với giá vàng (%)
 
             alert(
-                `📈 Số dư cao nhất: ${max.balance.toFixed(2)} USD lúc ${max.time.toLocaleString()}\n` +
+                `📈 Số dư cao nhất: ${max.balance.toFixed(2)} USD lúc ${max.time.toLocaleString()} (Giá vàng: ${max.goldPrice.toFixed(2)} USD)\n` +
                 `⏱️ Mất ${maxDuration} giây kể từ lúc bắt đầu\n\n` +
-                `📉 Số dư thấp nhất: ${min.balance.toFixed(2)} USD lúc ${min.time.toLocaleString()}\n` +
-                `⏱️ Mất ${minDuration} giây kể từ lúc bắt đầu`
+                `📉 Số dư thấp nhất: ${min.balance.toFixed(2)} USD lúc ${min.time.toLocaleString()} (Giá vàng: ${min.goldPrice.toFixed(2)} USD)\n` +
+                `⏱️ Mất ${minDuration} giây kể từ lúc bắt đầu\n\n` +
+                `💰 Lợi nhuận trung bình mỗi lệnh: ${avgProfit} USD\n` +
+                `🌟 Giá vàng trung bình: ${avgGoldPrice} USD\n` +
+                `📊 Tỷ lệ lợi nhuận so với giá vàng: ${profitToGoldRatio}%`
             );
         }
 
-        // Vẽ biểu đồ số dư (từ ý tưởng gốc)
+        // Vẽ biểu đồ số dư và giá vàng
         function drawBalanceChart() {
             if (!balanceHistory || balanceHistory.length === 0) return;
 
             const ctx = document.getElementById('balanceChart').getContext('2d');
             const labels = balanceHistory.map(item => new Date(item.time).toLocaleTimeString('vi-VN'));
-            const data = balanceHistory.map(item => item.balance);
+            const balances = balanceHistory.map(item => item.balance);
+            const goldPrices = balanceHistory.map(item => item.goldPrice);
 
             // Xóa biểu đồ cũ nếu có
             if (balanceChart) balanceChart.destroy();
@@ -600,20 +613,50 @@
                 type: 'line',
                 data: {
                     labels: labels,
-                    datasets: [{
-                        label: 'Số Dư (USD)',
-                        data: data,
-                        borderColor: '#0ecb81',
-                        backgroundColor: 'rgba(14, 203, 129, 0.1)',
-                        tension: 0.2,
-                        fill: true
-                    }]
+                    datasets: [
+                        {
+                            label: 'Số Dư (USD)',
+                            data: balances,
+                            borderColor: '#0ecb81',
+                            backgroundColor: 'rgba(14, 203, 129, 0.1)',
+                            tension: 0.2,
+                            fill: true,
+                            yAxisID: 'y'
+                        },
+                        {
+                            label: 'Giá Vàng (XAU/USD)',
+                            data: goldPrices,
+                            borderColor: '#d4af37',
+                            backgroundColor: 'rgba(212, 175, 55, 0.1)',
+                            tension: 0.2,
+                            fill: false,
+                            yAxisID: 'y1'
+                        }
+                    ]
                 },
                 options: {
                     responsive: true,
                     scales: {
                         y: {
-                            beginAtZero: false
+                            type: 'linear',
+                            display: true,
+                            position: 'left',
+                            title: {
+                                display: true,
+                                text: 'Số Dư (USD)'
+                            }
+                        },
+                        y1: {
+                            type: 'linear',
+                            display: true,
+                            position: 'right',
+                            title: {
+                                display: true,
+                                text: 'Giá Vàng (USD)'
+                            },
+                            grid: {
+                                drawOnChartArea: false // Không hiển thị lưới của trục phụ
+                            }
                         }
                     }
                 }
@@ -697,4 +740,4 @@
         };
     </script>
 </body>
-</html>
+    </html>
