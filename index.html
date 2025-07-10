@@ -174,6 +174,7 @@
             <div style="margin-top: 20px;">
                 <button onclick="startAutoTrading()">Bắt Đầu Giao Dịch</button>
                 <button class="danger" onclick="stopAutoTrading()">Dừng Giao Dịch</button>
+                <button onclick="analyzeBalanceHistory()">Phân Tích Hiệu Suất</button>
             </div>
         </div>
 
@@ -202,6 +203,13 @@
                 <canvas id="priceChart"></canvas>
             </div>
         </div>
+
+        <div class="panel">
+            <div class="panel-title">Biểu Đồ Số Dư Theo Thời Gian</div>
+            <div class="chart-container">
+                <canvas id="balanceChart" height="300"></canvas>
+            </div>
+        </div>
         
         <div id="activeTrades" style="display: none;">
             <div class="panel-title">Lệnh Hiện Tại</div>
@@ -220,6 +228,7 @@
         const FINNHUB_API_KEY = 'd1l6t99r01qt4thebangd1l6t99r01qt4thebao0'; // API key của bạn
         let currentPrice = 0;
         let chart;
+        let balanceChart;
         let ws;
         let autoTradingActive = false;
         let tradingInterval;
@@ -227,17 +236,16 @@
         let tradesToday = 0;
         let currentTrades = [];
         let priceHistory = [];
+        let balanceHistory = JSON.parse(localStorage.getItem('balanceHistory')) || [];
         let isWaitingNewTrades = false;
         let lastUpdateTime = null;
-        let tpSuggestions = []; // Lưu trữ các gợi ý TP
-        const MIN_SUGGESTIONS = 3; // Số lượng lệnh SL tối thiểu để đề xuất TP mới
 
         // Âm thanh mặc định
         let openSound = new Audio('https://www.soundjay.com/buttons/button-21.mp3');
         let tpSound = new Audio('https://www.soundjay.com/buttons/button-09.mp3');
         let slSound = new Audio('https://www.soundjay.com/buttons/button-10.mp3');
 
-        // Khởi tạo biểu đồ
+        // Khởi tạo biểu đồ giá
         function initChart() {
             const ctx = document.getElementById('priceChart').getContext('2d');
             chart = new Chart(ctx, {
@@ -261,6 +269,9 @@
                     }
                 }
             });
+
+            // Khởi tạo biểu đồ số dư
+            drawBalanceChart();
         }
 
         // Kết nối WebSocket Finnhub
@@ -283,14 +294,6 @@
                     
                     document.getElementById('currentPrice').textContent = newPrice.toFixed(2);
                     
-                    // Cập nhật giá vào priceDuringTrade cho các lệnh đang mở
-                    currentTrades.forEach(trade => {
-                        if (!trade.closed) {
-                            trade.priceDuringTrade.push(newPrice);
-                        }
-                    });
-                    
-                    // Cập nhật thông tin lệnh ngay khi giá thay đổi
                     if (autoTradingActive && currentTrades.length > 0) {
                         updateTradeInfo();
                     }
@@ -338,7 +341,7 @@
             console.log(`[${now}] ${message}`);
         }
 
-        // Cập nhật biểu đồ
+        // Cập nhật biểu đồ giá
         function updateChart() {
             const labels = priceHistory.map(item => item.time);
             const data = priceHistory.map(item => item.price);
@@ -395,7 +398,6 @@
             updateStatus();
             
             if (currentTrades.length === 0) {
-                // Đợi giá cập nhật rồi mới tạo lệnh
                 const waitForPrice = setInterval(() => {
                     if (currentPrice > 0) {
                         clearInterval(waitForPrice);
@@ -438,8 +440,7 @@
                     takeProfit: price + tp,
                     lotSize,
                     leverage,
-                    closed: false,
-                    priceDuringTrade: [price] // Khởi tạo mảng giá với giá vào lệnh
+                    closed: false
                 },
                 {
                     type: 'SELL',
@@ -449,8 +450,7 @@
                     takeProfit: price - tp,
                     lotSize,
                     leverage,
-                    closed: false,
-                    priceDuringTrade: [price] // Khởi tạo mảng giá với giá vào lệnh
+                    closed: false
                 }
             ];
             
@@ -503,7 +503,7 @@
             }
         }
 
-        // Đóng lệnh
+        // Đóng lệnh (nâng cấp để ghi nhận lịch sử số dư)
         function closeTrade(trade, closePrice, reason) {
             const profit = trade.type === 'BUY'
                 ? (closePrice - trade.entryPrice) * trade.lotSize * trade.leverage
@@ -517,32 +517,24 @@
             virtualBalance += profit;
             tradesToday++;
             
-            // Phân tích khi bị SL
-            if (reason === 'STOP LOSS') {
-                const prices = trade.priceDuringTrade;
-                const maxPrice = Math.max(...prices);
-                const minPrice = Math.min(...prices);
-                
-                if (trade.type === 'BUY' && maxPrice > trade.entryPrice && maxPrice < trade.takeProfit) {
-                    const suggestedTP = maxPrice - trade.entryPrice;
-                    tpSuggestions.push(suggestedTP);
-                    addHistory(`📊 Gợi ý: Giảm TP cho lệnh BUY từ ${(trade.takeProfit - trade.entryPrice).toFixed(2)} xuống ${suggestedTP.toFixed(2)} USD vì giá chỉ đạt tối đa ${maxPrice.toFixed(2)}.`);
-                    logStatus(`📊 Gợi ý TP mới cho BUY: ${suggestedTP.toFixed(2)} USD (giá cao nhất: ${maxPrice.toFixed(2)})`);
-                } else if (trade.type === 'SELL' && minPrice < trade.entryPrice && minPrice > trade.takeProfit) {
-                    const suggestedTP = trade.entryPrice - minPrice;
-                    tpSuggestions.push(suggestedTP);
-                    addHistory(`📊 Gợi ý: Giảm TP cho lệnh SELL từ ${(trade.entryPrice - trade.takeProfit).toFixed(2)} xuống ${suggestedTP.toFixed(2)} USD vì giá chỉ đạt tối thiểu ${minPrice.toFixed(2)}.`);
-                    logStatus(`📊 Gợi ý TP mới cho SELL: ${suggestedTP.toFixed(2)} USD (giá thấp nhất: ${minPrice.toFixed(2)})`);
-                }
-                
-                // Tính TP trung bình sau khi có đủ gợi ý
-                if (tpSuggestions.length >= MIN_SUGGESTIONS) {
-                    const avgTP = tpSuggestions.reduce((sum, tp) => sum + tp, 0) / tpSuggestions.length;
-                    addHistory(`📈 Đề xuất TP tối ưu: ${avgTP.toFixed(2)} USD (dựa trên ${tpSuggestions.length} lệnh SL).`);
-                    logStatus(`📈 Đề xuất TP tối ưu: ${avgTP.toFixed(2)} USD (dựa trên ${tpSuggestions.length} lệnh SL)`);
-                }
-            }
-            
+            // Ghi nhận lịch sử số dư
+            balanceHistory.push({
+                time: new Date(),
+                balance: virtualBalance,
+                profit: profit,
+                reason: reason,
+                type: trade.type,
+                entryPrice: trade.entryPrice,
+                closePrice: closePrice,
+                lotSize: trade.lotSize
+            });
+
+            // Lưu vào localStorage
+            localStorage.setItem('balanceHistory', JSON.stringify(balanceHistory));
+
+            // Cập nhật biểu đồ số dư
+            drawBalanceChart();
+
             // Phát âm thanh tương ứng
             if (reason === 'TAKE PROFIT') {
                 tpSound.play().catch(e => console.log("Không thể phát âm thanh TP:", e));
@@ -564,6 +556,68 @@
                 `Lợi nhuận: ${profit.toFixed(2)} USD | ` +
                 `Số dư mới: ${virtualBalance.toFixed(2)} USD`
             );
+        }
+
+        // Phân tích hiệu suất (từ ý tưởng gốc)
+        function analyzeBalanceHistory() {
+            if (!balanceHistory || balanceHistory.length === 0) {
+                alert("Không có dữ liệu giao dịch!");
+                return;
+            }
+
+            let max = balanceHistory[0];
+            let min = balanceHistory[0];
+
+            balanceHistory.forEach(item => {
+                if (item.balance > max.balance) max = item;
+                if (item.balance < min.balance) min = item;
+            });
+
+            const first = balanceHistory[0];
+            const maxDuration = ((new Date(max.time) - new Date(first.time)) / 1000).toFixed(0);
+            const minDuration = ((new Date(min.time) - new Date(first.time)) / 1000).toFixed(0);
+
+            alert(
+                `📈 Số dư cao nhất: ${max.balance.toFixed(2)} USD lúc ${max.time.toLocaleString()}\n` +
+                `⏱️ Mất ${maxDuration} giây kể từ lúc bắt đầu\n\n` +
+                `📉 Số dư thấp nhất: ${min.balance.toFixed(2)} USD lúc ${min.time.toLocaleString()}\n` +
+                `⏱️ Mất ${minDuration} giây kể từ lúc bắt đầu`
+            );
+        }
+
+        // Vẽ biểu đồ số dư (từ ý tưởng gốc)
+        function drawBalanceChart() {
+            if (!balanceHistory || balanceHistory.length === 0) return;
+
+            const ctx = document.getElementById('balanceChart').getContext('2d');
+            const labels = balanceHistory.map(item => new Date(item.time).toLocaleTimeString('vi-VN'));
+            const data = balanceHistory.map(item => item.balance);
+
+            // Xóa biểu đồ cũ nếu có
+            if (balanceChart) balanceChart.destroy();
+
+            balanceChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Số Dư (USD)',
+                        data: data,
+                        borderColor: '#0ecb81',
+                        backgroundColor: 'rgba(14, 203, 129, 0.1)',
+                        tension: 0.2,
+                        fill: true
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    scales: {
+                        y: {
+                            beginAtZero: false
+                        }
+                    }
+                }
+            });
         }
 
         // Cập nhật thông tin lệnh
@@ -627,8 +681,10 @@
         // Xóa lịch sử
         function clearHistory() {
             document.getElementById('historyList').innerHTML = '';
-            tpSuggestions = []; // Xóa cả gợi ý TP khi xóa lịch sử
-            logStatus('🧹 Đã xóa lịch sử giao dịch và gợi ý TP');
+            balanceHistory = []; // Xóa lịch sử số dư
+            localStorage.removeItem('balanceHistory'); // Xóa localStorage
+            drawBalanceChart(); // Cập nhật biểu đồ
+            logStatus('🧹 Đã xóa lịch sử giao dịch');
         }
 
         // Khởi động ứng dụng
