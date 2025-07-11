@@ -175,6 +175,7 @@
                 <button onclick="startAutoTrading()">Bắt Đầu Giao Dịch</button>
                 <button class="danger" onclick="stopAutoTrading()">Dừng Giao Dịch</button>
                 <button onclick="analyzeBalanceHistory()">Phân Tích Hiệu Suất</button>
+                <button class="danger" onclick="resetData()">Reset Dữ Liệu</button>
             </div>
         </div>
 
@@ -388,12 +389,79 @@
             if (slSoundUrl) slSound = new Audio(slSoundUrl);
         }
 
+        // Lưu cài đặt giao dịch
+        function saveTradingSettings() {
+            const settings = {
+                virtualBalance: parseFloat(document.getElementById('virtualBalance').value),
+                leverage: parseInt(document.getElementById('leverage').value),
+                lotSize: parseFloat(document.getElementById('lotSize').value),
+                stopLoss: parseFloat(document.getElementById('stopLoss').value),
+                takeProfit: parseFloat(document.getElementById('takeProfit').value),
+                tradesToday: tradesToday
+            };
+            localStorage.setItem('tradingSettings', JSON.stringify(settings));
+            logStatus('💾 Đã lưu cài đặt giao dịch');
+        }
+
+        // Tải cài đặt giao dịch
+        function loadTradingSettings() {
+            const settings = JSON.parse(localStorage.getItem('tradingSettings'));
+            if (settings) {
+                document.getElementById('virtualBalance').value = settings.virtualBalance;
+                document.getElementById('leverage').value = settings.leverage;
+                document.getElementById('lotSize').value = settings.lotSize;
+                document.getElementById('stopLoss').value = settings.stopLoss;
+                document.getElementById('takeProfit').value = settings.takeProfit;
+                virtualBalance = settings.virtualBalance;
+                tradesToday = settings.tradesToday || 0;
+                updateStatus();
+                logStatus('🔄 Đã tải cài đặt giao dịch từ localStorage');
+            }
+        }
+
+        // Reset dữ liệu về trạng thái ban đầu
+        function resetData() {
+            if (!confirm('Bạn có chắc chắn muốn reset tất cả dữ liệu? Mọi cài đặt và lịch sử sẽ bị xóa!')) return;
+
+            // Xóa dữ liệu
+            localStorage.removeItem('balanceHistory');
+            localStorage.removeItem('tradingSettings');
+            localStorage.removeItem('openSound');
+            localStorage.removeItem('tpSound');
+            localStorage.removeItem('slSound');
+
+            // Khôi phục trạng thái ban đầu
+            virtualBalance = 1000;
+            tradesToday = 0;
+            balanceHistory = [];
+            currentTrades = [];
+            document.getElementById('virtualBalance').value = 1000;
+            document.getElementById('leverage').value = 10;
+            document.getElementById('lotSize').value = 0.1;
+            document.getElementById('stopLoss').value = 50;
+            document.getElementById('takeProfit').value = 65;
+            document.getElementById('historyList').innerHTML = '';
+            document.getElementById('activeTrades').style.display = 'none';
+            document.getElementById('currentTradeDetails').innerHTML = '';
+
+            // Khôi phục âm thanh mặc định
+            openSound = new Audio('https://www.soundjay.com/buttons/button-21.mp3');
+            tpSound = new Audio('https://www.soundjay.com/buttons/button-09.mp3');
+            slSound = new Audio('https://www.soundjay.com/buttons/button-10.mp3');
+
+            // Cập nhật giao diện và biểu đồ
+            updateStatus();
+            drawBalanceChart();
+            logStatus('🔄 Đã reset dữ liệu về trạng thái ban đầu');
+        }
+
         // Bắt đầu giao dịch tự động
         function startAutoTrading() {
             if (autoTradingActive) return;
             
             virtualBalance = parseFloat(document.getElementById('virtualBalance').value);
             autoTradingActive = true;
+            saveTradingSettings(); // Lưu cài đặt khi bắt đầu
             
             updateStatus();
             
@@ -414,6 +482,7 @@
         function stopAutoTrading() {
             autoTradingActive = false;
             clearInterval(tradingInterval);
+            saveTradingSettings(); // Lưu cài đặt khi dừng
             updateStatus();
             logStatus('🛑 Dừng giao dịch tự động');
         }
@@ -462,6 +531,7 @@
             addHistory(`Mở lệnh SELL @ ${price.toFixed(2)} | SL: ${(price + sl).toFixed(2)} | TP: ${(price - tp).toFixed(2)}`);
             
             logStatus(`📈 Mở 2 lệnh mới (BUY/SELL) @ ${price.toFixed(2)}`);
+            saveTradingSettings(); // Lưu cài đặt sau khi tạo lệnh
         }
 
         // Kiểm tra điều kiện đóng lệnh
@@ -503,7 +573,7 @@
             }
         }
 
-        // Đóng lệnh (nâng cấp để lưu giá vàng)
+        // Đóng lệnh
         function closeTrade(trade, closePrice, reason) {
             const profit = trade.type === 'BUY'
                 ? (closePrice - trade.entryPrice) * trade.lotSize * trade.leverage
@@ -526,12 +596,13 @@
                 type: trade.type,
                 entryPrice: trade.entryPrice,
                 closePrice: closePrice,
-                goldPrice: currentPrice, // Lưu giá vàng tại thời điểm đóng lệnh
+                goldPrice: currentPrice,
                 lotSize: trade.lotSize
             });
 
             // Lưu vào localStorage
             localStorage.setItem('balanceHistory', JSON.stringify(balanceHistory));
+            saveTradingSettings(); // Lưu cài đặt sau mỗi giao dịch
 
             // Cập nhật biểu đồ số dư
             drawBalanceChart();
@@ -559,7 +630,7 @@
             );
         }
 
-        // Phân tích hiệu suất (nâng cấp để hiển thị tỷ lệ lợi nhuận so với giá vàng)
+        // Phân tích hiệu suất
         function analyzeBalanceHistory() {
             if (!balanceHistory || balanceHistory.length === 0) {
                 alert("Không có dữ liệu giao dịch!");
@@ -584,7 +655,7 @@
             const minDuration = ((new Date(min.time) - new Date(first.time)) / 1000).toFixed(0);
             const avgProfit = (totalProfit / tradesCount).toFixed(2);
             const avgGoldPrice = (totalGoldPrice / tradesCount).toFixed(2);
-            const profitToGoldRatio = ((totalProfit / tradesCount) / avgGoldPrice * 100).toFixed(2); // Tỷ lệ lợi nhuận trung bình so với giá vàng (%)
+            const profitToGoldRatio = ((totalProfit / tradesCount) / avgGoldPrice * 100).toFixed(2);
 
             alert(
                 `📈 Số dư cao nhất: ${max.balance.toFixed(2)} USD lúc ${max.time.toLocaleString()} (Giá vàng: ${max.goldPrice.toFixed(2)} USD)\n` +
@@ -655,7 +726,7 @@
                                 text: 'Giá Vàng (USD)'
                             },
                             grid: {
-                                drawOnChartArea: false // Không hiển thị lưới của trục phụ
+                                drawOnChartArea: false
                             }
                         }
                     }
@@ -724,9 +795,10 @@
         // Xóa lịch sử
         function clearHistory() {
             document.getElementById('historyList').innerHTML = '';
-            balanceHistory = []; // Xóa lịch sử số dư
-            localStorage.removeItem('balanceHistory'); // Xóa localStorage
-            drawBalanceChart(); // Cập nhật biểu đồ
+            balanceHistory = [];
+            localStorage.removeItem('balanceHistory');
+            drawBalanceChart();
+            saveTradingSettings(); // Lưu cài đặt sau khi xóa lịch sử
             logStatus('🧹 Đã xóa lịch sử giao dịch');
         }
 
@@ -735,8 +807,14 @@
             initChart();
             connectWebSocket();
             loadSoundSettings();
+            loadTradingSettings(); // Tải cài đặt giao dịch
             updateStatus();
             logStatus('🔄 Ứng dụng đã khởi động, đang kết nối...');
+
+            // Lắng nghe thay đổi input để lưu cài đặt
+            ['virtualBalance', 'leverage', 'lotSize', 'stopLoss', 'takeProfit'].forEach(id => {
+                document.getElementById(id).addEventListener('change', saveTradingSettings);
+            });
         };
     </script>
 </body>
