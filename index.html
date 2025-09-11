@@ -193,8 +193,21 @@
                 <label for="slSoundInput">Âm thanh Stop Loss:</label>
                 <input type="file" id="slSoundInput" accept=".mp3">
             </div>
+            <div class="control-group">
+                <label for="globalNotifySoundInput">Âm thanh thông báo chung:</label>
+                <input type="file" id="globalNotifySoundInput" accept=".mp3">
+            </div>
+            <div class="control-group">
+                <label for="useGlobalSound">Dùng âm thanh chung cho tất cả thông báo:</label>
+                <input type="checkbox" id="useGlobalSound">
+            </div>
+            <div class="control-group">
+                <label for="intersectionAlertSoundInput">Âm thanh cảnh báo giao nhau:</label>
+                <input type="file" id="intersectionAlertSoundInput" accept=".mp3">
+            </div>
             <div style="margin-top: 20px;">
                 <button onclick="saveSoundSettings()">Lưu Cấu Hình Âm Thanh</button>
+                <button onclick="saveGlobalNotifySound()">Lưu Âm thanh chung</button>
             </div>
         </div>
         
@@ -245,6 +258,27 @@
         let openSound = new Audio('https://www.soundjay.com/buttons/button-21.mp3');
         let tpSound = new Audio('https://www.soundjay.com/buttons/button-09.mp3');
         let slSound = new Audio('https://www.soundjay.com/buttons/button-10.mp3');
+        let globalNotifySound = new Audio('https://www.soundjay.com/buttons/sounds/beep-07.mp3'); // mặc định
+        let intersectionAlertSound = new Audio('https://www.soundjay.com/misc/warning-sound-2.mp3'); // mặc định cho giao nhau
+        let useGlobalSound = false;
+
+        // Bộ lưu các index đã báo để tránh lặp
+        let alertedIntersectionIndices = new Set();
+        
+        // Hàm phát âm thanh thông báo theo cài đặt (nếu bật global thì dùng global)
+        function playNotificationSound(specificAudio) {
+            try {
+                if (useGlobalSound && globalNotifySound) {
+                    globalNotifySound.currentTime = 0;
+                    globalNotifySound.play().catch(e => console.log('Không thể phát globalNotifySound:', e));
+                } else if (specificAudio) {
+                    specificAudio.currentTime = 0;
+                    specificAudio.play().catch(e => console.log('Không thể phát specificAudio:', e));
+                }
+            } catch (e) {
+                console.log('Lỗi phát âm thanh:', e);
+            }
+        }
 
         // Khởi tạo biểu đồ giá và số dư
         function initChart() {
@@ -357,6 +391,7 @@
             const openFile = document.getElementById('openSoundInput').files[0];
             const tpFile = document.getElementById('tpSoundInput').files[0];
             const slFile = document.getElementById('slSoundInput').files[0];
+            const intersectionFile = document.getElementById('intersectionAlertSoundInput').files[0]; // Thêm vào đây
 
             if (openFile) {
                 const openSoundUrl = URL.createObjectURL(openFile);
@@ -373,9 +408,28 @@
                 slSound = new Audio(slSoundUrl);
                 localStorage.setItem('slSound', slSoundUrl);
             }
+            if (intersectionFile) { // Lưu âm thanh cảnh báo giao nhau
+                const intersectionSoundUrl = URL.createObjectURL(intersectionFile);
+                intersectionAlertSound = new Audio(intersectionSoundUrl);
+                localStorage.setItem('intersectionAlertSound', intersectionSoundUrl);
+            }
 
             alert('Đã lưu cấu hình âm thanh!');
             logStatus('🎵 Đã lưu cấu hình âm thanh');
+        }
+
+        // Lưu âm thanh chung từ file input
+        function saveGlobalNotifySound() {
+            const file = document.getElementById('globalNotifySoundInput').files[0];
+            const useGlobal = document.getElementById('useGlobalSound').checked;
+            if (file) {
+                const url = URL.createObjectURL(file);
+                globalNotifySound = new Audio(url);
+                localStorage.setItem('globalNotifySound', url);
+            }
+            localStorage.setItem('useGlobalSound', useGlobal ? '1' : '0');
+            alert('✅ Đã lưu âm thanh chung và cài đặt sử dụng.');
+            logStatus('🎵 Đã lưu âm thanh chung');
         }
 
         // Tải cấu hình âm thanh từ localStorage
@@ -383,10 +437,21 @@
             const openSoundUrl = localStorage.getItem('openSound');
             const tpSoundUrl = localStorage.getItem('tpSound');
             const slSoundUrl = localStorage.getItem('slSound');
+            const intersectionSoundUrl = localStorage.getItem('intersectionAlertSound'); // Thêm vào đây
 
             if (openSoundUrl) openSound = new Audio(openSoundUrl);
             if (tpSoundUrl) tpSound = new Audio(tpSoundUrl);
             if (slSoundUrl) slSound = new Audio(slSoundUrl);
+            if (intersectionSoundUrl) intersectionAlertSound = new Audio(intersectionSoundUrl); // Tải âm thanh cảnh báo giao nhau
+        }
+
+        // Tải âm thanh chung khi trang mở
+        function loadGlobalNotifySound() {
+            const url = localStorage.getItem('globalNotifySound');
+            const useFlag = localStorage.getItem('useGlobalSound');
+            if (url) globalNotifySound = new Audio(url);
+            useGlobalSound = useFlag === '1';
+            document.getElementById('useGlobalSound').checked = useGlobalSound;
         }
 
         // Lưu cài đặt giao dịch
@@ -429,6 +494,9 @@
             localStorage.removeItem('openSound');
             localStorage.removeItem('tpSound');
             localStorage.removeItem('slSound');
+            localStorage.removeItem('globalNotifySound');
+            localStorage.removeItem('intersectionAlertSound'); // Thêm vào đây
+            localStorage.removeItem('useGlobalSound');
 
             // Khôi phục trạng thái ban đầu
             virtualBalance = 1000;
@@ -443,11 +511,18 @@
             document.getElementById('historyList').innerHTML = '';
             document.getElementById('activeTrades').style.display = 'none';
             document.getElementById('currentTradeDetails').innerHTML = '';
+            
+            // Xóa bộ nhớ các điểm giao nhau đã báo
+            alertedIntersectionIndices.clear();
 
             // Khôi phục âm thanh mặc định
             openSound = new Audio('https://www.soundjay.com/buttons/button-21.mp3');
             tpSound = new Audio('https://www.soundjay.com/buttons/button-09.mp3');
             slSound = new Audio('https://www.soundjay.com/buttons/button-10.mp3');
+            globalNotifySound = new Audio('https://www.soundjay.com/buttons/sounds/beep-07.mp3');
+            intersectionAlertSound = new Audio('https://www.soundjay.com/misc/warning-sound-2.mp3');
+            useGlobalSound = false;
+            document.getElementById('useGlobalSound').checked = false;
 
             // Cập nhật giao diện và biểu đồ
             updateStatus();
@@ -526,7 +601,7 @@
             document.getElementById('activeTrades').style.display = 'block';
             updateTradeInfo();
             
-            openSound.play().catch(e => console.log("Không thể phát âm thanh mở lệnh:", e));
+            playNotificationSound(openSound);
             addHistory(`Mở lệnh BUY @ ${price.toFixed(2)} | SL: ${(price - sl).toFixed(2)} | TP: ${(price + tp).toFixed(2)}`);
             addHistory(`Mở lệnh SELL @ ${price.toFixed(2)} | SL: ${(price + sl).toFixed(2)} | TP: ${(price - tp).toFixed(2)}`);
             
@@ -609,9 +684,9 @@
 
             // Phát âm thanh tương ứng
             if (reason === 'TAKE PROFIT') {
-                tpSound.play().catch(e => console.log("Không thể phát âm thanh TP:", e));
+                playNotificationSound(tpSound);
             } else if (reason === 'STOP LOSS') {
-                slSound.play().catch(e => console.log("Không thể phát âm thanh SL:", e));
+                playNotificationSound(slSound);
             }
             
             addHistory(
@@ -666,6 +741,60 @@
                 `🌟 Giá vàng trung bình: ${avgGoldPrice} USD\n` +
                 `📊 Tỷ lệ lợi nhuận so với giá vàng: ${profitToGoldRatio}%`
             );
+        }
+
+        // Kiểm tra giao nhau cho các điểm trong balanceChart (gọi sau khi chart vẽ xong)
+        function detectBalanceGoldIntersections() {
+            if (!balanceChart) return;
+
+            // Lấy datasets
+            const dsBalance = balanceChart.data.datasets[0]?.data || [];
+            const dsGold = balanceChart.data.datasets[1]?.data || [];
+            const scaleLeft = balanceChart.scales['y'];   // số dư
+            const scaleRight = balanceChart.scales['y1']; // giá vàng
+
+            if (!scaleLeft || !scaleRight) return;
+
+            // nếu độ dài khác nhau, lấy min length
+            const len = Math.min(dsBalance.length, dsGold.length);
+            if (len < 2) return;
+
+            for (let i = 0; i < len; i++) {
+                // vị trí pixel theo y cho mỗi điểm
+                const balVal = dsBalance[i];
+                const goldVal = dsGold[i];
+
+                // Lấy pixel Y trên từng scale
+                const balPixel = scaleLeft.getPixelForValue(balVal);
+                const goldPixel = scaleRight.getPixelForValue(goldVal);
+
+                // Khoảng chênh giữa 2 đường tại điểm i (pixel). Nếu gần 0 => giao nhau tại chính điểm đó.
+                const diffAtI = balPixel - goldPixel;
+
+                // Nếu có ít nhất 1 điểm trước đó, kiểm tra dấu đổi => giao nhau đoạn (i-1, i)
+                if (i > 0) {
+                    const prevBal = dsBalance[i-1];
+                    const prevGold = dsGold[i-1];
+                    const prevBalPixel = scaleLeft.getPixelForValue(prevBal);
+                    const prevGoldPixel = scaleRight.getPixelForValue(prevGold);
+                    const diffPrev = prevBalPixel - prevGoldPixel;
+
+                    // Nếu có đổi dấu hoặc chạm (<= 0 crossing), coi như giao nhau giữa i-1 và i
+                    if (diffPrev === 0 || diffAtI === 0 || (diffPrev < 0 && diffAtI > 0) || (diffPrev > 0 && diffAtI < 0)) {
+                        // Dùng chỉ số i làm khóa để tránh báo nhiều lần (khi redraw)
+                        if (!alertedIntersectionIndices.has(i)) {
+                            alertedIntersectionIndices.add(i);
+
+                            // Lấy thời gian / giá để hiển thị
+                            const timeLabel = balanceChart.data.labels[i] || '';
+                            const goldPriceAtI = dsGold[i];
+                            addHistory(`🔔 Giao nhau: Biểu đồ Số Dư & Giá Vàng tại index ${i} (thời gian: ${timeLabel}) | Giá vàng: ${Number(goldPriceAtI).toFixed(2)}`);
+                            // Phát âm thanh cảnh báo (dùng global nếu bật)
+                            playNotificationSound(intersectionAlertSound);
+                        }
+                    }
+                }
+            }
         }
 
         // Vẽ biểu đồ số dư và giá vàng
@@ -732,6 +861,15 @@
                     }
                 }
             });
+
+            // Sau khi vẽ biểu đồ lại, chạy kiểm tra giao nhau
+            setTimeout(() => {
+                try {
+                    detectBalanceGoldIntersections();
+                } catch(e) {
+                    console.log('Lỗi khi kiểm tra giao nhau:', e);
+                }
+            }, 50);
         }
 
         // Cập nhật thông tin lệnh
@@ -800,6 +938,7 @@
             drawBalanceChart();
             saveTradingSettings(); // Lưu cài đặt sau khi xóa lịch sử
             logStatus('🧹 Đã xóa lịch sử giao dịch');
+            alertedIntersectionIndices.clear(); // xóa bộ nhớ giao nhau
         }
 
         // Khởi động ứng dụng
@@ -807,6 +946,7 @@
             initChart();
             connectWebSocket();
             loadSoundSettings();
+            loadGlobalNotifySound();
             loadTradingSettings(); // Tải cài đặt giao dịch
             updateStatus();
             logStatus('🔄 Ứng dụng đã khởi động, đang kết nối...');
@@ -815,7 +955,11 @@
             ['virtualBalance', 'leverage', 'lotSize', 'stopLoss', 'takeProfit'].forEach(id => {
                 document.getElementById(id).addEventListener('change', saveTradingSettings);
             });
+            document.getElementById('useGlobalSound').addEventListener('change', function() {
+                useGlobalSound = this.checked;
+                localStorage.setItem('useGlobalSound', this.checked ? '1' : '0');
+            });
         };
     </script>
 </body>
-    </html>
+</html>
