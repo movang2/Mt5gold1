@@ -4,46 +4,85 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Giao Dịch Vàng (XAU/USD) - Finnhub</title>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js">
-// --- Thêm âm thanh & cảnh báo ---
-let openSound=new Audio('https://www.soundjay.com/buttons/button-21.mp3');
-let tpSound=new Audio('https://www.soundjay.com/buttons/button-09.mp3');
-let slSound=new Audio('https://www.soundjay.com/buttons/button-10.mp3');
-let alertSound=new Audio('https://www.soundjay.com/buttons/sounds/beep-07.mp3');
-let globalNotifySound=new Audio('https://www.soundjay.com/buttons/sounds/beep-07.mp3');
-let useGlobalSound=false;
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script>
+        // --- Thêm âm thanh & cảnh báo ---
+        let openSound = new Audio('https://www.soundjay.com/buttons/button-21.mp3');
+        let tpSound = new Audio('https://www.soundjay.com/buttons/button-09.mp3');
+        let slSound = new Audio('https://www.soundjay.com/buttons/button-10.mp3');
+        let alertSound = new Audio('https://www.soundjay.com/buttons/sounds/beep-07.mp3');
+        let globalNotifySound = new Audio('https://www.soundjay.com/buttons/sounds/beep-07.mp3');
+        let useGlobalSound = false;
 
-let alertLevels=[]; let alertedLevels=new Set(); let alertedIntersectionIndices=new Set();
+        let alertLevels = [];
+        let alertedLevels = new Set();
+        let alertedIntersectionIndices = new Set();
 
-function saveSoundSettings(){
-  function loadFile(id,setter,key){const f=document.getElementById(id)?.files[0];if(f){const u=URL.createObjectURL(f);setter(new Audio(u));localStorage.setItem(key,u);}}
-  loadFile('openSoundInput',a=>openSound=a,'openSound');
-  loadFile('tpSoundInput',a=>tpSound=a,'tpSound');
-  loadFile('slSoundInput',a=>slSound=a,'slSound');
-  loadFile('alertSoundInput',a=>alertSound=a,'alertSound');
-  loadFile('globalNotifySoundInput',a=>globalNotifySound=a,'globalNotifySound');
-  useGlobalSound=document.getElementById('useGlobalSound').checked; localStorage.setItem('useGlobalSound',useGlobalSound?'1':'0');
-  alert('✅ Đã lưu âm thanh');
-}
-function loadSoundSettings(){
-  function get(key,def){const u=localStorage.getItem(key);return u?new Audio(u):def;}
-  openSound=get('openSound',openSound);
-  tpSound=get('tpSound',tpSound);
-  slSound=get('slSound',slSound);
-  alertSound=get('alertSound',alertSound);
-  globalNotifySound=get('globalNotifySound',globalNotifySound);
-  useGlobalSound=localStorage.getItem('useGlobalSound')==='1';
-  const chk=document.getElementById('useGlobalSound');if(chk) chk.checked=useGlobalSound;
-}
-function playNotificationSound(specific){try{if(useGlobalSound){globalNotifySound.currentTime=0;globalNotifySound.play();}else if(specific){specific.currentTime=0;specific.play();}}catch(e){}}
+        function saveSoundSettings() {
+            function loadFile(id, setter, key) {
+                const f = document.getElementById(id)?.files[0];
+                if (f) {
+                    const u = URL.createObjectURL(f);
+                    setter(new Audio(u));
+                    localStorage.setItem(key, u);
+                }
+            }
+            loadFile('openSoundInput', a => openSound = a, 'openSound');
+            loadFile('tpSoundInput', a => tpSound = a, 'tpSound');
+            loadFile('slSoundInput', a => slSound = a, 'slSound');
+            loadFile('alertSoundInput', a => alertSound = a, 'alertSound');
+            loadFile('globalNotifySoundInput', a => globalNotifySound = a, 'globalNotifySound');
+            useGlobalSound = document.getElementById('useGlobalSound').checked;
+            localStorage.setItem('useGlobalSound', useGlobalSound ? '1' : '0');
+            alert('✅ Đã lưu âm thanh');
+        }
 
-function updateAlertLevels(){const input=document.getElementById('alertPrices')?.value||'';alertLevels=input.split(',').map(p=>parseFloat(p.trim())).filter(p=>!isNaN(p));alertedLevels.clear();}
+        function loadSoundSettings() {
+            function get(key, def) {
+                const u = localStorage.getItem(key);
+                return u ? new Audio(u) : def;
+            }
+            openSound = get('openSound', openSound);
+            tpSound = get('tpSound', tpSound);
+            slSound = get('slSound', slSound);
+            alertSound = get('alertSound', alertSound);
+            globalNotifySound = get('globalNotifySound', globalNotifySound);
+            useGlobalSound = localStorage.getItem('useGlobalSound') === '1';
+            const chk = document.getElementById('useGlobalSound');
+            if (chk) chk.checked = useGlobalSound;
+        }
 
-function checkPriceAlerts(oldP,newP){alertLevels.forEach(level=>{if(alertedLevels.has(level))return;if((oldP<level&&newP>=level)||(oldP>level&&newP<=level)){alertedLevels.add(level);addHistory(`📢 Giá cắt mốc ${level.toFixed(2)} (hiện: ${newP.toFixed(2)})`);playNotificationSound(alertSound);}});}
+        function playNotificationSound(specific) {
+            try {
+                if (useGlobalSound) {
+                    globalNotifySound.currentTime = 0;
+                    globalNotifySound.play();
+                } else if (specific) {
+                    specific.currentTime = 0;
+                    specific.play();
+                }
+            } catch (e) {
+                console.error("Không thể phát âm thanh:", e);
+            }
+        }
 
-function detectBalanceGoldIntersections(){if(!balanceChart)return;const dsBalance=balanceChart.data.datasets[0].data,dsGold=balanceChart.data.datasets[1].data,scaleL=balanceChart.scales['y'],scaleR=balanceChart.scales['y1'];const len=Math.min(dsBalance.length,dsGold.length);for(let i=1;i<len;i++){const d0=scaleL.getPixelForValue(dsBalance[i-1])-scaleR.getPixelForValue(dsGold[i-1]);const d1=scaleL.getPixelForValue(dsBalance[i])-scaleR.getPixelForValue(dsGold[i]);if((d0===0||d1===0)||(d0<0&&d1>0)||(d0>0&&d1<0)){if(!alertedIntersectionIndices.has(i)){alertedIntersectionIndices.add(i);addHistory(`🔔 Giao nhau Số Dư & Giá Vàng tại ${balanceChart.data.labels[i]}`);playNotificationSound(alertSound);}}}}
+        function updateAlertLevels() {
+            const input = document.getElementById('alertPrices')?.value || '';
+            alertLevels = input.split(',').map(p => parseFloat(p.trim())).filter(p => !isNaN(p));
+            alertedLevels.clear();
+        }
 
-</script>
+        function checkPriceAlerts(oldP, newP) {
+            alertLevels.forEach(level => {
+                if (alertedLevels.has(level)) return;
+                if ((oldP < level && newP >= level) || (oldP > level && newP <= level)) {
+                    alertedLevels.add(level);
+                    addHistory(`📢 Giá cắt mốc ${level.toFixed(2)} (hiện: ${newP.toFixed(2)})`);
+                    playNotificationSound(alertSound);
+                }
+            });
+        }
+    </script>
     <style>
         body {
             font-family: 'Arial', sans-serif;
@@ -177,17 +216,17 @@ function detectBalanceGoldIntersections(){if(!balanceChart)return;const dsBalanc
 <body>
     <div class="container">
         <h1>Giao Dịch Vàng (XAU/USD) - Finnhub</h1>
-        
+
         <div class="status-bar" id="tradingStatus">
             <div>Trạng thái: <span id="statusText">Chưa bắt đầu</span></div>
             <div>Số dư: <span id="balanceText">1000.00</span> USD</div>
             <div>Lệnh hôm nay: <span id="tradesCount">0</span></div>
         </div>
-        
+
         <div class="price-display">
             Giá XAU/USD hiện tại: <span id="currentPrice">0.00</span>
         </div>
-        
+
         <div class="panel">
             <div class="panel-title">Thiết Lập Giao Dịch</div>
             <div class="control-group">
@@ -248,7 +287,7 @@ function detectBalanceGoldIntersections(){if(!balanceChart)return;const dsBalanc
                 <button onclick="saveAllSoundSettings()">Lưu Cấu Hình Âm Thanh</button>
             </div>
         </div>
-        
+
         <div class="panel">
             <div class="panel-title">Biểu Đồ Giá</div>
             <div class="chart-container">
@@ -257,17 +296,17 @@ function detectBalanceGoldIntersections(){if(!balanceChart)return;const dsBalanc
         </div>
 
         <div class="panel">
-            <div class="panel-title">Biểu Đồ Số Dư Theo Thời Gian</div>
+            <div class="panel-title">Biểu Đồ Số Dư & Giá Vàng</div>
             <div class="chart-container">
                 <canvas id="balanceChart" height="300"></canvas>
             </div>
         </div>
-        
+
         <div id="activeTrades" style="display: none;">
             <div class="panel-title">Lệnh Hiện Tại</div>
             <div class="trade-info" id="currentTradeDetails"></div>
         </div>
-        
+
         <div class="panel">
             <div class="panel-title">Lịch Sử Giao Dịch</div>
             <div id="historyList"></div>
@@ -300,7 +339,8 @@ function detectBalanceGoldIntersections(){if(!balanceChart)return;const dsBalanc
 
         let alertLevels = [];
         let alertedLevels = new Set();
-        
+        let alertedIntersectionIndices = new Set(); // Thêm biến này
+
         // Khởi tạo biểu đồ giá
         function initChart() {
             const ctx = document.getElementById('priceChart').getContext('2d');
@@ -333,60 +373,64 @@ function detectBalanceGoldIntersections(){if(!balanceChart)return;const dsBalanc
         // Kết nối WebSocket Finnhub
         function connectWebSocket() {
             ws = new WebSocket(`wss://ws.finnhub.io?token=${FINNHUB_API_KEY}`);
-            
+
             ws.onopen = () => {
                 logStatus('✅ Đã kết nối Finnhub WebSocket');
                 ws.send(JSON.stringify({ type: 'subscribe', symbol: 'OANDA:XAU_USD' }));
             };
-            
+
             ws.onmessage = (event) => {
                 const data = JSON.parse(event.data);
                 lastUpdateTime = new Date();
-                
+
                 if (data.type === 'trade') {
                     const latestTrade = data.data[data.data.length - 1];
                     const oldPrice = currentPrice;
                     const newPrice = parseFloat(latestTrade.p);
                     currentPrice = newPrice;
-                    
+
                     document.getElementById('currentPrice').textContent = newPrice.toFixed(2);
-                    
+
                     if (autoTradingActive && currentTrades.length > 0) {
                         updateTradeInfo();
                     }
-                    
+
                     checkPriceAlerts(oldPrice, newPrice);
 
                     const now = new Date();
                     const timeLabel = `${now.getHours()}:${now.getMinutes()}:${now.getSeconds()}`;
-                    
+
+                    // Ghi nhận cả giá vàng và số dư vào lịch sử
                     priceHistory.push({
                         time: timeLabel,
                         price: newPrice
                     });
-                    
+
+                    // Thêm dòng này để cập nhật biểu đồ số dư mỗi khi có giá mới
+                    drawBalanceChart();
+
                     if (priceHistory.length > 100) {
                         priceHistory.shift();
                     }
-                    
+
                     updateChart();
-                    
+
                     if (autoTradingActive) {
                         checkTrades();
                     }
                 }
             };
-            
+
             ws.onerror = (error) => {
                 logStatus(`❌ Lỗi WebSocket: ${error.message}`);
                 setTimeout(connectWebSocket, 5000);
             };
-            
+
             ws.onclose = () => {
                 logStatus('⚠️ Mất kết nối. Đang thử kết nối lại...');
                 setTimeout(connectWebSocket, 5000);
             };
-            
+
             setInterval(() => {
                 if (lastUpdateTime && (new Date() - lastUpdateTime > 20000)) {
                     logStatus('⚠️ Cảnh báo: Dữ liệu không được cập nhật >20 giây');
@@ -404,7 +448,7 @@ function detectBalanceGoldIntersections(){if(!balanceChart)return;const dsBalanc
         function updateChart() {
             const labels = priceHistory.map(item => item.time);
             const data = priceHistory.map(item => item.price);
-            
+
             chart.data.labels = labels;
             chart.data.datasets[0].data = data;
             chart.update();
@@ -462,12 +506,12 @@ function detectBalanceGoldIntersections(){if(!balanceChart)return;const dsBalanc
         // Bắt đầu giao dịch tự động
         function startAutoTrading() {
             if (autoTradingActive) return;
-            
+
             virtualBalance = parseFloat(document.getElementById('virtualBalance').value);
             autoTradingActive = true;
-            
+
             updateStatus();
-            
+
             if (currentTrades.length === 0) {
                 const waitForPrice = setInterval(() => {
                     if (currentPrice > 0) {
@@ -476,7 +520,7 @@ function detectBalanceGoldIntersections(){if(!balanceChart)return;const dsBalanc
                     }
                 }, 500);
             }
-            
+
             tradingInterval = setInterval(checkTrades, 1000);
             logStatus('🚀 Bắt đầu giao dịch tự động');
         }
@@ -495,77 +539,73 @@ function detectBalanceGoldIntersections(){if(!balanceChart)return;const dsBalanc
                 stopAutoTrading();
                 return;
             }
-            
+
             const price = currentPrice;
             const sl = parseFloat(document.getElementById('stopLoss').value);
             const tp = parseFloat(document.getElementById('takeProfit').value);
             const lotSize = parseFloat(document.getElementById('lotSize').value);
             const leverage = parseInt(document.getElementById('leverage').value);
-            
-            currentTrades = [
-                {
-                    type: 'BUY',
-                    entryPrice: price,
-                    entryTime: new Date().toLocaleString('vi-VN'),
-                    stopLoss: price - sl,
-                    takeProfit: price + tp,
-                    lotSize,
-                    leverage,
-                    closed: false
-                },
-                {
-                    type: 'SELL',
-                    entryPrice: price,
-                    entryTime: new Date().toLocaleString('vi-VN'),
-                    stopLoss: price + sl,
-                    takeProfit: price - tp,
-                    lotSize,
-                    leverage,
-                    closed: false
-                }
-            ];
-            
+
+            currentTrades = [{
+                type: 'BUY',
+                entryPrice: price,
+                entryTime: new Date().toLocaleString('vi-VN'),
+                stopLoss: price - sl,
+                takeProfit: price + tp,
+                lotSize,
+                leverage,
+                closed: false
+            }, {
+                type: 'SELL',
+                entryPrice: price,
+                entryTime: new Date().toLocaleString('vi-VN'),
+                stopLoss: price + sl,
+                takeProfit: price - tp,
+                lotSize,
+                leverage,
+                closed: false
+            }];
+
             document.getElementById('activeTrades').style.display = 'block';
             updateTradeInfo();
-            
+
             openSound.play().catch(e => console.log("Không thể phát âm thanh mở lệnh:", e));
             addHistory(`Mở lệnh BUY @ ${price.toFixed(2)} | SL: ${(price - sl).toFixed(2)} | TP: ${(price + tp).toFixed(2)}`);
             addHistory(`Mở lệnh SELL @ ${price.toFixed(2)} | SL: ${(price + sl).toFixed(2)} | TP: ${(price - tp).toFixed(2)}`);
-            
+
             logStatus(`📈 Mở 2 lệnh mới (BUY/SELL) @ ${price.toFixed(2)}`);
         }
 
         // Kiểm tra điều kiện đóng lệnh
         function checkTrades() {
             if (!autoTradingActive || currentTrades.length === 0 || isWaitingNewTrades) return;
-            
+
             let allClosed = true;
-            
+
             currentTrades.forEach(trade => {
                 if (trade.closed) return;
-                
+
                 allClosed = false;
                 let closeReason = '';
-                
-                if ((trade.type === 'BUY' && currentPrice <= trade.stopLoss) || 
+
+                if ((trade.type === 'BUY' && currentPrice <= trade.stopLoss) ||
                     (trade.type === 'SELL' && currentPrice >= trade.stopLoss)) {
                     closeReason = 'STOP LOSS';
-                } 
-                else if ((trade.type === 'BUY' && currentPrice >= trade.takeProfit) || 
-                         (trade.type === 'SELL' && currentPrice <= trade.takeProfit)) {
+                } else if ((trade.type === 'BUY' && currentPrice >= trade.takeProfit) ||
+                    (trade.type === 'SELL' && currentPrice <= trade.takeProfit)) {
                     closeReason = 'TAKE PROFIT';
                 }
-                
+
                 if (closeReason) {
                     closeTrade(trade, currentPrice, closeReason);
                 }
             });
-            
+
             if (allClosed && autoTradingActive) {
                 isWaitingNewTrades = true;
                 updateStatus("Đang chờ tạo lệnh mới...");
                 logStatus('⏳ Đang chờ tạo lệnh mới (3s)');
-                
+
                 setTimeout(() => {
                     createNewTrades();
                     isWaitingNewTrades = false;
@@ -576,10 +616,10 @@ function detectBalanceGoldIntersections(){if(!balanceChart)return;const dsBalanc
 
         // Đóng lệnh (nâng cấp để ghi nhận lịch sử số dư)
         function closeTrade(trade, closePrice, reason) {
-            const profit = trade.type === 'BUY'
-                ? (closePrice - trade.entryPrice) * trade.lotSize * trade.leverage
-                : (trade.entryPrice - closePrice) * trade.lotSize * trade.leverage;
-            
+            const profit = trade.type === 'BUY' ?
+                (closePrice - trade.entryPrice) * trade.lotSize * trade.leverage :
+                (trade.entryPrice - closePrice) * trade.lotSize * trade.leverage;
+
             trade.closed = true;
             trade.exitPrice = closePrice;
             trade.exitTime = new Date().toLocaleString('vi-VN');
@@ -587,10 +627,10 @@ function detectBalanceGoldIntersections(){if(!balanceChart)return;const dsBalanc
             trade.closeReason = reason;
             virtualBalance += profit;
             tradesToday++;
-            
+
             // Ghi nhận lịch sử số dư
             balanceHistory.push({
-                time: new Date(),
+                time: new Date().toISOString(),
                 balance: virtualBalance,
                 profit: profit,
                 reason: reason,
@@ -612,16 +652,16 @@ function detectBalanceGoldIntersections(){if(!balanceChart)return;const dsBalanc
             } else if (reason === 'STOP LOSS') {
                 slSound.play().catch(e => console.log("Không thể phát âm thanh SL:", e));
             }
-            
+
             addHistory(
                 `Đóng lệnh ${trade.type} @ ${closePrice.toFixed(2)} (${reason}) | ` +
                 `Lợi nhuận: <span class="${profit >= 0 ? 'profit' : 'loss'}">${profit.toFixed(2)} USD</span> | ` +
                 `Số dư: ${virtualBalance.toFixed(2)} USD`
             );
-            
+
             updateTradeInfo();
             updateStatus();
-            
+
             logStatus(
                 `📉 Đóng lệnh ${trade.type} (${reason}) | ` +
                 `Lợi nhuận: ${profit.toFixed(2)} USD | ` +
@@ -649,68 +689,96 @@ function detectBalanceGoldIntersections(){if(!balanceChart)return;const dsBalanc
             const minDuration = ((new Date(min.time) - new Date(first.time)) / 1000).toFixed(0);
 
             alert(
-                `📈 Số dư cao nhất: ${max.balance.toFixed(2)} USD lúc ${max.time.toLocaleString()}\n` +
+                `📈 Số dư cao nhất: ${max.balance.toFixed(2)} USD lúc ${new Date(max.time).toLocaleString()}\n` +
                 `⏱️ Mất ${maxDuration} giây kể từ lúc bắt đầu\n\n` +
-                `📉 Số dư thấp nhất: ${min.balance.toFixed(2)} USD lúc ${min.time.toLocaleString()}\n` +
+                `📉 Số dư thấp nhất: ${min.balance.toFixed(2)} USD lúc ${new Date(min.time).toLocaleString()}\n` +
                 `⏱️ Mất ${minDuration} giây kể từ lúc bắt đầu`
             );
         }
 
-        // Vẽ biểu đồ số dư (từ ý tưởng gốc)
+        // Vẽ biểu đồ số dư
         function drawBalanceChart() {
-            if (!balanceHistory || balanceHistory.length === 0) return;
-
             const ctx = document.getElementById('balanceChart').getContext('2d');
-            const labels = balanceHistory.map(item => new Date(item.time).toLocaleTimeString('vi-VN'));
-            const data = balanceHistory.map(item => item.balance);
-
-            // Xóa biểu đồ cũ nếu có
             if (balanceChart) balanceChart.destroy();
 
             balanceChart = new Chart(ctx, {
                 type: 'line',
                 data: {
-                    labels: labels,
+                    labels: priceHistory.map(p => p.time),
                     datasets: [{
-                        label: 'Số Dư (USD)',
-                        data: data,
+                        label: 'Số Dư',
+                        data: balanceHistory.map(b => b.balance || 1000),
                         borderColor: '#0ecb81',
-                        backgroundColor: 'rgba(14, 203, 129, 0.1)',
-                        tension: 0.2,
-                        fill: true
+                        yAxisID: 'y'
+                    }, {
+                        label: 'Giá Vàng',
+                        data: priceHistory.map(p => p.price),
+                        borderColor: '#d4af37',
+                        yAxisID: 'y1'
                     }]
                 },
                 options: {
                     responsive: true,
                     scales: {
                         y: {
-                            beginAtZero: false
+                            type: 'linear',
+                            position: 'left'
+                        },
+                        y1: {
+                            type: 'linear',
+                            position: 'right'
                         }
                     }
                 }
             });
+
+            // kiểm tra giao nhau sau khi vẽ
+            setTimeout(() => {
+                detectBalanceGoldIntersections();
+            }, 100);
+        }
+
+        // Kiểm tra giao nhau
+        function detectBalanceGoldIntersections() {
+            if (!balanceChart) return;
+            const dsBalance = balanceChart.data.datasets[0].data,
+                dsGold = balanceChart.data.datasets[1].data;
+            const len = Math.min(dsBalance.length, dsGold.length);
+
+            for (let i = 1; i < len; i++) {
+                const prevDiff = dsBalance[i - 1] - dsGold[i - 1];
+                const currentDiff = dsBalance[i] - dsGold[i];
+
+                if ((prevDiff < 0 && currentDiff >= 0) || (prevDiff > 0 && currentDiff <= 0)) {
+                    if (!alertedIntersectionIndices.has(i)) {
+                        alertedIntersectionIndices.add(i);
+                        addHistory(`🔔 Giao nhau Số Dư & Giá Vàng tại ${balanceChart.data.labels[i]}`);
+                        playNotificationSound(alertSound);
+                    }
+                }
+            }
         }
 
         // Cập nhật thông tin lệnh
         function updateTradeInfo() {
             const container = document.getElementById('currentTradeDetails');
             container.innerHTML = '';
-            
+
             currentTrades.forEach(trade => {
                 const price = currentPrice;
                 let profit = 0;
                 let profitClass = '';
-                
+
                 if (!trade.closed) {
-                    profit = trade.type === 'BUY'
-                        ? (price - trade.entryPrice) * trade.lotSize * trade.leverage
-                        : (trade.entryPrice - price) * trade.lotSize * trade.leverage;
+                    profit = trade.type === 'BUY' ?
+                        (price - trade.entryPrice) * trade.lotSize * trade.leverage :
+                        (trade.entryPrice - price) * trade.lotSize * trade.leverage;
                     profitClass = profit >= 0 ? 'profit' : 'loss';
                 } else {
                     profit = trade.profit || 0;
                     profitClass = profit >= 0 ? 'profit' : 'loss';
                 }
-                
+
                 const tradeBox = document.createElement('div');
                 tradeBox.className = `trade-box ${trade.type.toLowerCase()}`;
                 tradeBox.innerHTML = `
@@ -721,7 +789,7 @@ function detectBalanceGoldIntersections(){if(!balanceChart)return;const dsBalanc
                     <p>SL: ${trade.stopLoss.toFixed(2)} | TP: ${trade.takeProfit.toFixed(2)}</p>
                     ${trade.closed ? `<p>Lý do đóng: ${trade.closeReason}</p>` : ''}
                 `;
-                
+
                 container.appendChild(tradeBox);
             });
         }
@@ -730,7 +798,7 @@ function detectBalanceGoldIntersections(){if(!balanceChart)return;const dsBalanc
         function updateStatus(extra = "") {
             let status = autoTradingActive ? "Đang giao dịch tự động" : "Đã dừng";
             if (extra) status += " | " + extra;
-            
+
             document.getElementById('statusText').textContent = status;
             document.getElementById('balanceText').textContent = virtualBalance.toFixed(2);
             document.getElementById('tradesCount').textContent = tradesToday;
@@ -740,12 +808,12 @@ function detectBalanceGoldIntersections(){if(!balanceChart)return;const dsBalanc
         function addHistory(message) {
             const now = new Date();
             const timeString = now.toLocaleTimeString('vi-VN');
-            
+
             const historyList = document.getElementById('historyList');
             const historyItem = document.createElement('div');
             historyItem.className = 'history-item';
             historyItem.innerHTML = `<strong>${timeString}:</strong> ${message}`;
-            
+
             historyList.insertBefore(historyItem, historyList.firstChild);
         }
 
@@ -773,14 +841,16 @@ function detectBalanceGoldIntersections(){if(!balanceChart)return;const dsBalanc
             alertLevels.forEach(level => {
                 if (alertedLevels.has(level)) return;
 
-                if ((oldPrice < level && newPrice >= level) || 
+                if ((oldPrice < level && newPrice >= level) ||
                     (oldPrice > level && newPrice <= level)) {
-                    
+
                     alertedLevels.add(level);
                     addHistory(`📢 Giá đã cắt qua mốc ${level.toFixed(2)} (hiện tại: ${newPrice.toFixed(2)})`);
                     try {
                         alertSound.play();
-                    } catch(e) { console.log("Không thể phát âm thanh cảnh báo:", e); }
+                    } catch (e) {
+                        console.log("Không thể phát âm thanh cảnh báo:", e);
+                    }
                 }
             });
         }
@@ -792,7 +862,7 @@ function detectBalanceGoldIntersections(){if(!balanceChart)return;const dsBalanc
             loadSoundSettings();
             updateStatus();
             logStatus('🔄 Ứng dụng đã khởi động, đang kết nối...');
-            
+
             document.getElementById('alertPrices').addEventListener('change', updateAlertLevels);
         };
     </script>
