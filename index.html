@@ -11,6 +11,7 @@
         let tpSound = new Audio('https://www.soundjay.com/buttons/button-09.mp3');
         let slSound = new Audio('https://www.soundjay.com/buttons/button-10.mp3');
         let alertSound = new Audio('https://www.soundjay.com/buttons/sounds/beep-07.mp3');
+        let intersectionSound = null; // Biến âm thanh mới
         let globalNotifySound = new Audio('https://www.soundjay.com/buttons/sounds/beep-07.mp3');
         let useGlobalSound = false;
 
@@ -31,6 +32,7 @@
             loadFile('tpSoundInput', a => tpSound = a, 'tpSound');
             loadFile('slSoundInput', a => slSound = a, 'slSound');
             loadFile('alertSoundInput', a => alertSound = a, 'alertSound');
+            loadFile('intersectionSoundInput', a => intersectionSound = a, 'intersectionSound'); // Lưu âm thanh mới
             loadFile('globalNotifySoundInput', a => globalNotifySound = a, 'globalNotifySound');
             useGlobalSound = document.getElementById('useGlobalSound').checked;
             localStorage.setItem('useGlobalSound', useGlobalSound ? '1' : '0');
@@ -46,6 +48,7 @@
             tpSound = get('tpSound', tpSound);
             slSound = get('slSound', slSound);
             alertSound = get('alertSound', alertSound);
+            intersectionSound = get('intersectionSound', null); // Tải âm thanh mới
             globalNotifySound = get('globalNotifySound', globalNotifySound);
             useGlobalSound = localStorage.getItem('useGlobalSound') === '1';
             const chk = document.getElementById('useGlobalSound');
@@ -283,6 +286,10 @@
                 <label for="slSoundInput">Âm thanh Stop Loss:</label>
                 <input type="file" id="slSoundInput" accept=".mp3">
             </div>
+            <div class="control-group">
+                <label for="intersectionSoundInput">Âm thanh giao nhau:</label>
+                <input type="file" id="intersectionSoundInput" accept=".mp3">
+            </div>
             <div style="margin-top: 20px;">
                 <button onclick="saveAllSoundSettings()">Lưu Cấu Hình Âm Thanh</button>
             </div>
@@ -336,10 +343,11 @@
         let tpSound = new Audio('https://www.soundjay.com/buttons/button-09.mp3');
         let slSound = new Audio('https://www.soundjay.com/buttons/button-10.mp3');
         let alertSound = new Audio("https://www.soundjay.com/buttons/sounds/beep-07.mp3");
+        let intersectionSound = null; // Biến âm thanh mới cho giao nhau
 
         let alertLevels = [];
         let alertedLevels = new Set();
-        let alertedIntersectionIndices = new Set(); // Thêm biến này
+        let alertedIntersectionIndices = new Set();
 
         // Khởi tạo biểu đồ giá
         function initChart() {
@@ -400,13 +408,11 @@
                     const now = new Date();
                     const timeLabel = `${now.getHours()}:${now.getMinutes()}:${now.getSeconds()}`;
 
-                    // Ghi nhận cả giá vàng và số dư vào lịch sử
                     priceHistory.push({
                         time: timeLabel,
                         price: newPrice
                     });
 
-                    // Thêm dòng này để cập nhật biểu đồ số dư mỗi khi có giá mới
                     drawBalanceChart();
 
                     if (priceHistory.length > 100) {
@@ -459,6 +465,7 @@
             const openFile = document.getElementById('openSoundInput').files[0];
             const tpFile = document.getElementById('tpSoundInput').files[0];
             const slFile = document.getElementById('slSoundInput').files[0];
+            const intersectionFile = document.getElementById('intersectionSoundInput').files[0]; // Lấy file mới
 
             if (openFile) {
                 const openSoundUrl = URL.createObjectURL(openFile);
@@ -474,6 +481,11 @@
                 const slSoundUrl = URL.createObjectURL(slFile);
                 slSound = new Audio(slSoundUrl);
                 localStorage.setItem('slSound', slSoundUrl);
+            }
+            if (intersectionFile) { // Lưu file mới
+                const intersectionSoundUrl = URL.createObjectURL(intersectionFile);
+                intersectionSound = new Audio(intersectionSoundUrl);
+                localStorage.setItem('intersectionSound', intersectionSoundUrl);
             }
 
             alert('Đã lưu cấu hình âm thanh!');
@@ -496,11 +508,13 @@
             const tpSoundUrl = localStorage.getItem('tpSound');
             const slSoundUrl = localStorage.getItem('slSound');
             const alertSoundUrl = localStorage.getItem('alertSound');
+            const intersectionSoundUrl = localStorage.getItem('intersectionSound'); // Tải file mới
 
             if (openSoundUrl) openSound = new Audio(openSoundUrl);
             if (tpSoundUrl) tpSound = new Audio(tpSoundUrl);
             if (slSoundUrl) slSound = new Audio(slSoundUrl);
             if (alertSoundUrl) alertSound = new Audio(alertSoundUrl);
+            if (intersectionSoundUrl) intersectionSound = new Audio(intersectionSoundUrl);
         }
 
         // Bắt đầu giao dịch tự động
@@ -753,7 +767,22 @@
                     if (!alertedIntersectionIndices.has(i)) {
                         alertedIntersectionIndices.add(i);
                         addHistory(`🔔 Giao nhau Số Dư & Giá Vàng tại ${balanceChart.data.labels[i]}`);
-                        playNotificationSound(alertSound);
+                        
+                        // Phát âm thanh riêng, nếu không có thì dùng âm thanh chung
+                        if (intersectionSound) {
+                            try {
+                                intersectionSound.currentTime = 0;
+                                intersectionSound.play();
+                            } catch (e) {
+                                console.error("Không thể phát âm thanh giao nhau:", e);
+                            }
+                        } else {
+                            try {
+                                alertSound.play();
+                            } catch (e) {
+                                console.log("Không thể phát âm thanh cảnh báo:", e);
+                            }
+                        }
                     }
                 }
             }
