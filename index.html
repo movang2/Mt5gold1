@@ -251,7 +251,7 @@
 
     <script>
         // Biến toàn cục
-        const FINNHUB_API_KEY = 'd1l6t99r01qt4thebangd1l6t99r01qt4thebao0'; // API key của bạn
+        const FINNHUB_API_KEY = 'd1l6t99r01qt4thebangd1l6t99r01qt4thebao0';
         let currentPrice = 0;
         let chart;
         let balanceChart;
@@ -278,6 +278,13 @@
         let alertLevels = [];
         let alertedLevels = new Set();
         let alertedIntersectionIndices = new Set();
+        
+        // Ghi log trạng thái
+        function logStatus(message) {
+            const now = new Date().toLocaleTimeString();
+            console.log(`[${now}] ${message}`);
+            addHistory(message);
+        }
 
         // Khởi tạo biểu đồ giá và số dư
         function initChart() {
@@ -304,78 +311,69 @@
                 }
             });
 
-            // Khởi tạo biểu đồ số dư
             drawBalanceChart();
         }
 
-        // Kết nối WebSocket Finnhub
+        // Kết nối WebSocket Finnhub (ĐÃ SỬA)
         function connectWebSocket() {
-            ws = new WebSocket(`wss://ws.finnhub.io?token=${FINNHUB_API_KEY}`);
-            
-            ws.onopen = () => {
-                logStatus('✅ Đã kết nối Finnhub WebSocket');
-                ws.send(JSON.stringify({ type: 'subscribe', symbol: 'OANDA:XAU_USD' }));
-            };
-            
-            ws.onmessage = (event) => {
-                const data = JSON.parse(event.data);
-                lastUpdateTime = new Date();
+            try {
+                if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) return;
                 
-                if (data.type === 'trade') {
-                    const latestTrade = data.data[data.data.length - 1];
-                    const oldPrice = currentPrice;
-                    const newPrice = parseFloat(latestTrade.p);
-                    currentPrice = newPrice;
-                    
-                    document.getElementById('currentPrice').textContent = newPrice.toFixed(2);
-                    
-                    checkPriceAlerts(oldPrice, newPrice);
-                    
-                    if (autoTradingActive && currentTrades.length > 0) {
-                        updateTradeInfo();
+                ws = new WebSocket(`wss://ws.finnhub.io?token=${FINNHUB_API_KEY}`);
+                
+                ws.onopen = () => {
+                    console.log('WS open - subscribing OANDA:XAU_USD');
+                    ws.send(JSON.stringify({ type: 'subscribe', symbol: 'OANDA:XAU_USD' }));
+                    addHistory('🔌 Kết nối WebSocket');
+                };
+                
+                ws.onmessage = (evt) => {
+                    let data;
+                    try { 
+                        data = JSON.parse(evt.data); 
+                    } catch(e) { 
+                        console.error('WS JSON parse error', e); 
+                        return; 
                     }
                     
-                    const now = new Date();
-                    const timeLabel = `${now.getHours()}:${now.getMinutes()}:${now.getSeconds()}`;
-                    
-                    priceHistory.push({
-                        time: timeLabel,
-                        price: newPrice
-                    });
-                    
-                    if (priceHistory.length > 100) {
-                        priceHistory.shift();
+                    if (data && data.type === 'trade' && Array.isArray(data.data)) {
+                        const last = data.data[data.data.length - 1];
+                        if (!last || typeof last.p === 'undefined') return;
+                        
+                        const oldPrice = currentPrice;
+                        const newPrice = parseFloat(last.p);
+                        if (isNaN(newPrice)) return;
+                        
+                        currentPrice = newPrice;
+                        document.getElementById('currentPrice').textContent = newPrice.toFixed(2);
+                        lastUpdateTime = new Date();
+                        
+                        const now = new Date();
+                        priceHistory.push({ time: now.toLocaleTimeString('vi-VN'), price: newPrice });
+                        if (priceHistory.length > 200) priceHistory.shift();
+                        
+                        updateChart();
+                        drawBalanceChart();
+                        checkPriceAlerts(oldPrice, newPrice);
+                        
+                        if (autoTradingActive && currentTrades.length > 0) updateTradeInfo();
                     }
-                    
-                    updateChart();
-                    
-                    if (autoTradingActive) {
-                        checkTrades();
-                    }
-                }
-            };
-            
-            ws.onerror = (error) => {
-                logStatus(`❌ Lỗi WebSocket: ${error.message}`);
-                setTimeout(connectWebSocket, 5000);
-            };
-            
-            ws.onclose = () => {
-                logStatus('⚠️ Mất kết nối. Đang thử kết nối lại...');
-                setTimeout(connectWebSocket, 5000);
-            };
-            
-            setInterval(() => {
-                if (lastUpdateTime && (new Date() - lastUpdateTime > 20000)) {
-                    logStatus('⚠️ Cảnh báo: Dữ liệu không được cập nhật >20 giây');
-                }
-            }, 10000);
-        }
-
-        // Ghi log trạng thái
-        function logStatus(message) {
-            const now = new Date().toLocaleTimeString();
-            console.log(`[${now}] ${message}`);
+                };
+                
+                ws.onerror = (err) => {
+                    console.error('WS error', err);
+                    addHistory('⚠️ Lỗi WebSocket');
+                };
+                
+                ws.onclose = (ev) => {
+                    console.warn('WS closed - reconnect in 3s', ev);
+                    addHistory('⚠️ WebSocket đóng, thử kết nối lại...');
+                    setTimeout(connectWebSocket, 3000);
+                };
+            } catch(e) {
+                console.error('connectWebSocket error', e);
+                addHistory('❌ Lỗi kết nối WebSocket: ' + e.message);
+            }
         }
 
         // Cập nhật biểu đồ giá
@@ -390,37 +388,20 @@
 
         // Lưu tất cả cấu hình âm thanh
         function saveAllSoundSettings() {
-            const openFile = document.getElementById('openSoundInput').files[0];
-            const tpFile = document.getElementById('tpSoundInput').files[0];
-            const slFile = document.getElementById('slSoundInput').files[0];
-            const intersectionFile = document.getElementById('intersectionSoundInput').files[0];
-            const globalFile = document.getElementById('globalNotifySoundInput').files[0];
-
-            if (openFile) {
-                const openSoundUrl = URL.createObjectURL(openFile);
-                openSound = new Audio(openSoundUrl);
-                localStorage.setItem('openSound', openSoundUrl);
+            function loadFile(id, setter, key) {
+                const f = document.getElementById(id)?.files[0];
+                if (f) {
+                    const u = URL.createObjectURL(f);
+                    setter(new Audio(u));
+                    localStorage.setItem(key, u);
+                }
             }
-            if (tpFile) {
-                const tpSoundUrl = URL.createObjectURL(tpFile);
-                tpSound = new Audio(tpSoundUrl);
-                localStorage.setItem('tpSound', tpSoundUrl);
-            }
-            if (slFile) {
-                const slSoundUrl = URL.createObjectURL(slFile);
-                slSound = new Audio(slSoundUrl);
-                localStorage.setItem('slSound', slSoundUrl);
-            }
-            if (intersectionFile) {
-                const intersectionSoundUrl = URL.createObjectURL(intersectionFile);
-                intersectionSound = new Audio(intersectionSoundUrl);
-                localStorage.setItem('intersectionSound', intersectionSoundUrl);
-            }
-            if (globalFile) {
-                const globalNotifySoundUrl = URL.createObjectURL(globalFile);
-                globalNotifySound = new Audio(globalNotifySoundUrl);
-                localStorage.setItem('globalNotifySound', globalNotifySoundUrl);
-            }
+            
+            loadFile('openSoundInput', a => openSound = a, 'openSound');
+            loadFile('tpSoundInput', a => tpSound = a, 'tpSound');
+            loadFile('slSoundInput', a => slSound = a, 'slSound');
+            loadFile('intersectionSoundInput', a => intersectionSound = a, 'intersectionSound');
+            loadFile('globalNotifySoundInput', a => globalNotifySound = a, 'globalNotifySound');
 
             useGlobalSound = document.getElementById('useGlobalSound').checked;
             localStorage.setItem('useGlobalSound', useGlobalSound ? '1' : '0');
@@ -430,30 +411,27 @@
         }
 
         function saveAlertSound() {
-            const file = document.getElementById('alertSoundInput').files[0];
-            if (file) {
-                const url = URL.createObjectURL(file);
-                alertSound = new Audio(url);
-                localStorage.setItem('alertSound', url);
+            const f = document.getElementById('alertSoundInput')?.files[0];
+            if (f) {
+                const u = URL.createObjectURL(f);
+                alertSound = new Audio(u);
+                localStorage.setItem('alertSound', u);
                 alert("✅ Đã lưu âm thanh cảnh báo!");
             }
         }
 
         // Tải cấu hình âm thanh từ localStorage
         function loadSoundSettings() {
-            const openSoundUrl = localStorage.getItem('openSound');
-            const tpSoundUrl = localStorage.getItem('tpSound');
-            const slSoundUrl = localStorage.getItem('slSound');
-            const alertSoundUrl = localStorage.getItem('alertSound');
-            const intersectionSoundUrl = localStorage.getItem('intersectionSound');
-            const globalNotifySoundUrl = localStorage.getItem('globalNotifySound');
-
-            if (openSoundUrl) openSound = new Audio(openSoundUrl);
-            if (tpSoundUrl) tpSound = new Audio(tpSoundUrl);
-            if (slSoundUrl) slSound = new Audio(slSoundUrl);
-            if (alertSoundUrl) alertSound = new Audio(alertSoundUrl);
-            if (intersectionSoundUrl) intersectionSound = new Audio(intersectionSoundUrl);
-            if (globalNotifySoundUrl) globalNotifySound = new Audio(globalNotifySoundUrl);
+            function getAudio(key, def) {
+                const u = localStorage.getItem(key);
+                return u ? new Audio(u) : def;
+            }
+            openSound = getAudio('openSound', openSound);
+            tpSound = getAudio('tpSound', tpSound);
+            slSound = getAudio('slSound', slSound);
+            alertSound = getAudio('alertSound', alertSound);
+            intersectionSound = getAudio('intersectionSound', intersectionSound);
+            globalNotifySound = getAudio('globalNotifySound', globalNotifySound);
             
             useGlobalSound = localStorage.getItem('useGlobalSound') === '1';
             document.getElementById('useGlobalSound').checked = useGlobalSound;
@@ -533,7 +511,6 @@
         function resetData() {
             if (!confirm('Bạn có chắc chắn muốn reset tất cả dữ liệu? Mọi cài đặt và lịch sử sẽ bị xóa!')) return;
 
-            // Xóa dữ liệu
             localStorage.removeItem('balanceHistory');
             localStorage.removeItem('tradingSettings');
             localStorage.removeItem('openSound');
@@ -544,7 +521,6 @@
             localStorage.removeItem('globalNotifySound');
             localStorage.removeItem('useGlobalSound');
 
-            // Khôi phục trạng thái ban đầu
             virtualBalance = 1000;
             tradesToday = 0;
             balanceHistory = [];
@@ -564,7 +540,6 @@
             document.getElementById('activeTrades').style.display = 'none';
             document.getElementById('currentTradeDetails').innerHTML = '';
 
-            // Khôi phục âm thanh mặc định
             openSound = new Audio('https://www.soundjay.com/buttons/button-21.mp3');
             tpSound = new Audio('https://www.soundjay.com/buttons/button-09.mp3');
             slSound = new Audio('https://www.soundjay.com/buttons/button-10.mp3');
@@ -573,7 +548,6 @@
             intersectionSound = null;
             useGlobalSound = false;
 
-            // Cập nhật giao diện và biểu đồ
             updateStatus();
             drawBalanceChart();
             logStatus('🔄 Đã reset dữ liệu về trạng thái ban đầu');
@@ -585,7 +559,7 @@
             
             virtualBalance = parseFloat(document.getElementById('virtualBalance').value);
             autoTradingActive = true;
-            saveTradingSettings(); // Lưu cài đặt khi bắt đầu
+            saveTradingSettings();
             
             updateStatus();
             
@@ -606,7 +580,7 @@
         function stopAutoTrading() {
             autoTradingActive = false;
             clearInterval(tradingInterval);
-            saveTradingSettings(); // Lưu cài đặt khi dừng
+            saveTradingSettings();
             updateStatus();
             logStatus('🛑 Dừng giao dịch tự động');
         }
@@ -655,7 +629,7 @@
             addHistory(`Mở lệnh SELL @ ${price.toFixed(2)} | SL: ${(price + sl).toFixed(2)} | TP: ${(price - tp).toFixed(2)}`);
             
             logStatus(`📈 Mở 2 lệnh mới (BUY/SELL) @ ${price.toFixed(2)}`);
-            saveTradingSettings(); // Lưu cài đặt sau khi tạo lệnh
+            saveTradingSettings();
         }
 
         // Kiểm tra điều kiện đóng lệnh
@@ -711,7 +685,6 @@
             virtualBalance += profit;
             tradesToday++;
             
-            // Ghi nhận lịch sử số dư với giá vàng
             balanceHistory.push({
                 time: new Date(),
                 balance: virtualBalance,
@@ -724,14 +697,11 @@
                 lotSize: trade.lotSize
             });
 
-            // Lưu vào localStorage
             localStorage.setItem('balanceHistory', JSON.stringify(balanceHistory));
-            saveTradingSettings(); // Lưu cài đặt sau mỗi giao dịch
+            saveTradingSettings();
 
-            // Cập nhật biểu đồ số dư
             drawBalanceChart();
 
-            // Phát âm thanh tương ứng
             if (reason === 'TAKE PROFIT') {
                 playNotificationSound(tpSound);
             } else if (reason === 'STOP LOSS') {
@@ -794,14 +764,15 @@
 
         // Vẽ biểu đồ số dư và giá vàng
         function drawBalanceChart() {
-            if (!balanceHistory || balanceHistory.length === 0) return;
-
+            if (!balanceHistory || balanceHistory.length === 0) {
+                if (balanceChart) balanceChart.destroy();
+                return;
+            }
             const ctx = document.getElementById('balanceChart').getContext('2d');
             const labels = balanceHistory.map(item => new Date(item.time).toLocaleTimeString('vi-VN'));
             const balances = balanceHistory.map(item => item.balance);
             const goldPrices = balanceHistory.map(item => item.goldPrice);
 
-            // Xóa biểu đồ cũ nếu có
             if (balanceChart) balanceChart.destroy();
 
             balanceChart = new Chart(ctx, {
@@ -857,7 +828,6 @@
                 }
             });
 
-            // Kiểm tra giao nhau sau khi vẽ biểu đồ
             setTimeout(() => {
                 detectBalanceGoldIntersections();
             }, 100);
@@ -971,7 +941,7 @@
             balanceHistory = [];
             localStorage.removeItem('balanceHistory');
             drawBalanceChart();
-            saveTradingSettings(); // Lưu cài đặt sau khi xóa lịch sử
+            saveTradingSettings();
             logStatus('🧹 Đã xóa lịch sử giao dịch');
         }
 
@@ -980,19 +950,16 @@
             initChart();
             connectWebSocket();
             loadSoundSettings();
-            loadTradingSettings(); // Tải cài đặt giao dịch
+            loadTradingSettings();
             updateStatus();
-            logStatus('🔄 Ứng dụng đã khởi động, đang kết nối...');
-
-            // Lắng nghe thay đổi input để lưu cài đặt
+            addHistory('🔄 Ứng dụng khởi động');
+            
             ['virtualBalance', 'leverage', 'lotSize', 'stopLoss', 'takeProfit'].forEach(id => {
                 document.getElementById(id).addEventListener('change', saveTradingSettings);
             });
             
-            // Lắng nghe thay đổi mốc cảnh báo
             document.getElementById('alertPrices').addEventListener('change', updateAlertLevels);
             
-            // Lắng nghe thay đổi checkbox âm thanh chung
             document.getElementById('useGlobalSound').addEventListener('change', function() {
                 useGlobalSound = this.checked;
                 localStorage.setItem('useGlobalSound', useGlobalSound ? '1' : '0');
