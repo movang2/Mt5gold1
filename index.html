@@ -133,6 +133,38 @@
             display: flex;
             justify-content: space-between;
         }
+        .suggestion-box {
+            font-size: 16px;
+            padding: 10px;
+            margin-top: 10px;
+            border-radius: 4px;
+            font-weight: bold;
+            text-align: center;
+        }
+        .suggest-buy {
+            background-color: #d1ffc9;
+            color: #0ecb81;
+            border: 1px solid #0ecb81;
+        }
+        .suggest-sell {
+            background-color: #ffd4d4;
+            color: #f6465d;
+            border: 1px solid #f6465d;
+        }
+        .stats-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 15px;
+            font-size: 14px;
+        }
+        .stats-table th, .stats-table td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: left;
+        }
+        .stats-table th {
+            background-color: #e9ecef;
+        }
     </style>
 </head>
 <body>
@@ -211,6 +243,10 @@
                 <input type="file" id="intersectionSoundInput" accept=".mp3">
             </div>
             <div class="control-group">
+                <label for="suggestionSoundInput">Âm thanh Gợi ý:</label>
+                <input type="file" id="suggestionSoundInput" accept=".mp3">
+            </div>
+            <div class="control-group">
                 <label for="globalNotifySoundInput">Âm thanh thông báo chung:</label>
                 <input type="file" id="globalNotifySoundInput" accept=".mp3">
             </div>
@@ -221,6 +257,55 @@
             <div style="margin-top: 20px;">
                 <button onclick="saveAllSoundSettings()">Lưu Cấu Hình Âm Thanh</button>
             </div>
+        </div>
+        
+        <div class="panel">
+            <div class="panel-title">⚙️ Cài Đặt Gợi Ý Giao Dịch</div>
+            <div class="control-group">
+                <label for="minSlope">Độ dốc tối thiểu (Slope):</label>
+                <input type="number" id="minSlope" value="0.2" min="0.01" step="0.01">
+            </div>
+            <div class="control-group">
+                <label for="minGapPct">Khoảng cách tối thiểu (%):</label>
+                <input type="number" id="minGapPct" value="0.3" min="0.05" step="0.05">
+            </div>
+            <div class="control-group">
+                <label for="confirmDelay">Độ trễ xác nhận (điểm):</label>
+                <input type="number" id="confirmDelay" value="1" min="1" step="1">
+            </div>
+            <div class="control-group">
+                <label for="suggestionMode">Chế độ hiển thị:</label>
+                <select id="suggestionMode">
+                    <option value="all">Tất cả</option>
+                    <option value="buy">Chỉ MUA</option>
+                    <option value="sell">Chỉ BÁN</option>
+                </select>
+            </div>
+            <div style="margin-top: 20px;">
+                <button onclick="saveSuggestionSettings()">Lưu Cấu Hình Gợi Ý</button>
+                <button class="danger" onclick="resetSuggestionData()">Reset Gợi Ý</button>
+            </div>
+        </div>
+
+        <div class="panel">
+            <div class="panel-title">📊 Gợi Ý Giao Dịch</div>
+            <div id="suggestionDisplay">
+                Chưa có gợi ý nào.
+            </div>
+            <table class="stats-table">
+                <thead>
+                    <tr>
+                        <th>Gợi ý</th>
+                        <th>Tổng số</th>
+                        <th>Lệnh đúng (đóng lời)</th>
+                        <th>Tỉ lệ đúng (%)</th>
+                    </tr>
+                </thead>
+                <tbody id="suggestionStatsBody">
+                    <tr><td>BUY</td><td id="statBuyTotal">0</td><td id="statBuyCorrect">0</td><td id="statBuyPct">0.00%</td></tr>
+                    <tr><td>SELL</td><td id="statSellTotal">0</td><td id="statSellCorrect">0</td><td id="statSellPct">0.00%</td></tr>
+                </tbody>
+            </table>
         </div>
         
         <div class="panel">
@@ -243,7 +328,7 @@
         </div>
         
         <div class="panel">
-            <div class="panel-title">Lịch Sử Giao Dịch</div>
+            <div class="panel-title">Lịch Sử Giao Dịch & Log</div>
             <div id="historyList"></div>
             <button style="margin-top: 10px;" onclick="clearHistory()">Xóa Lịch Sử</button>
         </div>
@@ -266,12 +351,25 @@
         let isWaitingNewTrades = false;
         let lastUpdateTime = null;
 
+        // Cấu hình Gợi ý mới
+        let suggestionSettings = JSON.parse(localStorage.getItem('suggestionSettings')) || {
+            minSlope: 0.2,
+            minGapPct: 0.3,
+            confirmDelay: 1,
+            suggestionMode: 'all'
+        };
+        let suggestionStats = JSON.parse(localStorage.getItem('suggestionStats')) || {
+            BUY: { total: 0, correct: 0, lastIndex: -1, lastTime: null, lastTradeIndex: -1 },
+            SELL: { total: 0, correct: 0, lastIndex: -1, lastTime: null, lastTradeIndex: -1 }
+        };
+
         // Âm thanh mặc định
         let openSound = new Audio('https://www.soundjay.com/buttons/button-21.mp3');
         let tpSound = new Audio('https://www.soundjay.com/buttons/button-09.mp3');
         let slSound = new Audio('https://www.soundjay.com/buttons/button-10.mp3');
         let alertSound = new Audio("https://www.soundjay.com/buttons/sounds/beep-07.mp3");
         let intersectionSound = null;
+        let suggestionSound = null; // Âm thanh gợi ý mới
         let globalNotifySound = new Audio('https://www.soundjay.com/buttons/sounds/beep-07.mp3');
         let useGlobalSound = false;
 
@@ -298,7 +396,7 @@
                         data: [],
                         borderColor: '#d4af37',
                         backgroundColor: 'rgba(212, 175, 55, 0.1)',
-                        tension: 0.1,
+                        tension: 0.2, /* Cải thiện độ mượt */
                         fill: true
                     }]
                 },
@@ -312,9 +410,10 @@
             });
 
             drawBalanceChart();
+            updateSuggestionStatsDisplay();
         }
 
-        // Kết nối WebSocket Finnhub (ĐÃ SỬA)
+        // Kết nối WebSocket Finnhub
         function connectWebSocket() {
             try {
                 if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) return;
@@ -322,7 +421,7 @@
                 ws = new WebSocket(`wss://ws.finnhub.io?token=${FINNHUB_API_KEY}`);
                 
                 ws.onopen = () => {
-                    console.log('WS open - subscribing OANDA:XAU_USD');
+                    logStatus('WS open - subscribing OANDA:XAU_USD');
                     ws.send(JSON.stringify({ type: 'subscribe', symbol: 'OANDA:XAU_USD' }));
                     addHistory('🔌 Kết nối WebSocket');
                 };
@@ -353,7 +452,7 @@
                         if (priceHistory.length > 200) priceHistory.shift();
                         
                         updateChart();
-                        drawBalanceChart();
+                        drawBalanceChart(); // Sẽ gọi detectBalanceGoldIntersections và checkSuggestion
                         checkPriceAlerts(oldPrice, newPrice);
                         
                         if (autoTradingActive && currentTrades.length > 0) updateTradeInfo();
@@ -401,6 +500,7 @@
             loadFile('tpSoundInput', a => tpSound = a, 'tpSound');
             loadFile('slSoundInput', a => slSound = a, 'slSound');
             loadFile('intersectionSoundInput', a => intersectionSound = a, 'intersectionSound');
+            loadFile('suggestionSoundInput', a => suggestionSound = a, 'suggestionSound'); /* Lưu âm thanh gợi ý */
             loadFile('globalNotifySoundInput', a => globalNotifySound = a, 'globalNotifySound');
 
             useGlobalSound = document.getElementById('useGlobalSound').checked;
@@ -431,6 +531,7 @@
             slSound = getAudio('slSound', slSound);
             alertSound = getAudio('alertSound', alertSound);
             intersectionSound = getAudio('intersectionSound', intersectionSound);
+            suggestionSound = getAudio('suggestionSound', suggestionSound); // Tải âm thanh gợi ý
             globalNotifySound = getAudio('globalNotifySound', globalNotifySound);
             
             useGlobalSound = localStorage.getItem('useGlobalSound') === '1';
@@ -452,33 +553,44 @@
             }
         }
 
-        // Cập nhật mốc cảnh báo
-        function updateAlertLevels() {
-            const input = document.getElementById('alertPrices').value;
-            alertLevels = input.split(',')
-                .map(p => parseFloat(p.trim()))
-                .filter(p => !isNaN(p));
-            alertedLevels.clear();
+        // Lưu cài đặt Gợi ý mới
+        function saveSuggestionSettings() {
+            suggestionSettings.minSlope = parseFloat(document.getElementById('minSlope').value);
+            suggestionSettings.minGapPct = parseFloat(document.getElementById('minGapPct').value);
+            suggestionSettings.confirmDelay = parseInt(document.getElementById('confirmDelay').value);
+            suggestionSettings.suggestionMode = document.getElementById('suggestionMode').value;
+            
+            localStorage.setItem('suggestionSettings', JSON.stringify(suggestionSettings));
+            logStatus('💾 Đã lưu cấu hình gợi ý giao dịch');
+            alert('✅ Đã lưu cấu hình gợi ý!');
         }
 
-        // Kiểm tra cảnh báo giá
-        function checkPriceAlerts(oldPrice, newPrice) {
-            if (alertLevels.length === 0 || oldPrice === 0) return;
-
-            alertLevels.forEach(level => {
-                if (alertedLevels.has(level)) return;
-
-                if ((oldPrice < level && newPrice >= level) ||
-                    (oldPrice > level && newPrice <= level)) {
-                    alertedLevels.add(level);
-                    addHistory(`📢 Giá đã cắt qua mốc ${level.toFixed(2)} (hiện tại: ${newPrice.toFixed(2)})`);
-                    playNotificationSound(alertSound);
-                }
-            });
+        // Tải cài đặt Gợi ý
+        function loadSuggestionSettings() {
+            if (suggestionSettings) {
+                document.getElementById('minSlope').value = suggestionSettings.minSlope;
+                document.getElementById('minGapPct').value = suggestionSettings.minGapPct;
+                document.getElementById('confirmDelay').value = suggestionSettings.confirmDelay;
+                document.getElementById('suggestionMode').value = suggestionSettings.suggestionMode;
+            }
+        }
+        
+        // Reset dữ liệu Gợi ý và thống kê
+        function resetSuggestionData() {
+            if (!confirm('Bạn có chắc chắn muốn reset dữ liệu Gợi ý và Thống kê?')) return;
+            suggestionStats = {
+                BUY: { total: 0, correct: 0, lastIndex: -1, lastTime: null, lastTradeIndex: -1 },
+                SELL: { total: 0, correct: 0, lastIndex: -1, lastTime: null, lastTradeIndex: -1 }
+            };
+            localStorage.removeItem('suggestionStats');
+            document.getElementById('suggestionDisplay').innerHTML = 'Chưa có gợi ý nào.';
+            updateSuggestionStatsDisplay();
+            logStatus('🔄 Đã reset dữ liệu gợi ý và thống kê');
         }
 
         // Lưu cài đặt giao dịch
         function saveTradingSettings() {
+            // ... (Giữ nguyên)
             const settings = {
                 virtualBalance: parseFloat(document.getElementById('virtualBalance').value),
                 leverage: parseInt(document.getElementById('leverage').value),
@@ -493,6 +605,7 @@
 
         // Tải cài đặt giao dịch
         function loadTradingSettings() {
+            // ... (Giữ nguyên)
             const settings = JSON.parse(localStorage.getItem('tradingSettings'));
             if (settings) {
                 document.getElementById('virtualBalance').value = settings.virtualBalance;
@@ -513,11 +626,15 @@
 
             localStorage.removeItem('balanceHistory');
             localStorage.removeItem('tradingSettings');
+            localStorage.removeItem('suggestionSettings');
+            localStorage.removeItem('suggestionStats');
+            // ... (Phần xóa âm thanh giữ nguyên)
             localStorage.removeItem('openSound');
             localStorage.removeItem('tpSound');
             localStorage.removeItem('slSound');
             localStorage.removeItem('alertSound');
             localStorage.removeItem('intersectionSound');
+            localStorage.removeItem('suggestionSound'); /* Xóa âm gợi ý */
             localStorage.removeItem('globalNotifySound');
             localStorage.removeItem('useGlobalSound');
 
@@ -529,6 +646,7 @@
             alertedLevels.clear();
             alertedIntersectionIndices.clear();
             
+            // Reset Settings
             document.getElementById('virtualBalance').value = 1000;
             document.getElementById('leverage').value = 10;
             document.getElementById('lotSize').value = 0.1;
@@ -540,12 +658,18 @@
             document.getElementById('activeTrades').style.display = 'none';
             document.getElementById('currentTradeDetails').innerHTML = '';
 
+            // Reset Suggestion Settings/Stats
+            resetSuggestionData();
+            loadSuggestionSettings(); 
+            
+            // Reset Sound Objects (default values)
             openSound = new Audio('https://www.soundjay.com/buttons/button-21.mp3');
             tpSound = new Audio('https://www.soundjay.com/buttons/button-09.mp3');
             slSound = new Audio('https://www.soundjay.com/buttons/button-10.mp3');
             alertSound = new Audio("https://www.soundjay.com/buttons/sounds/beep-07.mp3");
             globalNotifySound = new Audio('https://www.soundjay.com/buttons/sounds/beep-07.mp3');
             intersectionSound = null;
+            suggestionSound = null; /* Reset âm gợi ý */
             useGlobalSound = false;
 
             updateStatus();
@@ -553,10 +677,10 @@
             logStatus('🔄 Đã reset dữ liệu về trạng thái ban đầu');
         }
 
-        // Bắt đầu giao dịch tự động
+        // Bắt đầu/Dừng giao dịch tự động (Giữ nguyên)
         function startAutoTrading() {
             if (autoTradingActive) return;
-            
+            // ... (Giữ nguyên)
             virtualBalance = parseFloat(document.getElementById('virtualBalance').value);
             autoTradingActive = true;
             saveTradingSettings();
@@ -576,8 +700,8 @@
             logStatus('🚀 Bắt đầu giao dịch tự động');
         }
 
-        // Dừng giao dịch tự động
         function stopAutoTrading() {
+            // ... (Giữ nguyên)
             autoTradingActive = false;
             clearInterval(tradingInterval);
             saveTradingSettings();
@@ -585,9 +709,10 @@
             logStatus('🛑 Dừng giao dịch tự động');
         }
 
-        // Tạo lệnh mới
+        // Tạo lệnh mới (Giữ nguyên)
         function createNewTrades() {
-            if (!autoTradingActive || currentPrice === 0 || virtualBalance < 100) {
+            // ... (Giữ nguyên)
+             if (!autoTradingActive || currentPrice === 0 || virtualBalance < 100) {
                 stopAutoTrading();
                 return;
             }
@@ -607,7 +732,8 @@
                     takeProfit: price + tp,
                     lotSize,
                     leverage,
-                    closed: false
+                    closed: false,
+                    tradeIndex: tradesToday + 1 // Đánh dấu lệnh này
                 },
                 {
                     type: 'SELL',
@@ -617,7 +743,8 @@
                     takeProfit: price - tp,
                     lotSize,
                     leverage,
-                    closed: false
+                    closed: false,
+                    tradeIndex: tradesToday + 2 // Đánh dấu lệnh này
                 }
             ];
             
@@ -631,9 +758,10 @@
             logStatus(`📈 Mở 2 lệnh mới (BUY/SELL) @ ${price.toFixed(2)}`);
             saveTradingSettings();
         }
-
-        // Kiểm tra điều kiện đóng lệnh
+        
+        // Kiểm tra điều kiện đóng lệnh (Giữ nguyên)
         function checkTrades() {
+             // ... (Giữ nguyên)
             if (!autoTradingActive || currentTrades.length === 0 || isWaitingNewTrades) return;
             
             let allClosed = true;
@@ -659,6 +787,7 @@
             });
             
             if (allClosed && autoTradingActive) {
+                currentTrades = []; // Xóa các lệnh đã đóng
                 isWaitingNewTrades = true;
                 updateStatus("Đang chờ tạo lệnh mới...");
                 logStatus('⏳ Đang chờ tạo lệnh mới (3s)');
@@ -684,6 +813,9 @@
             trade.closeReason = reason;
             virtualBalance += profit;
             tradesToday++;
+
+            // Cập nhật thống kê gợi ý dựa trên tradeIndex
+            updateSuggestionStats(trade, profit);
             
             balanceHistory.push({
                 time: new Date(),
@@ -694,7 +826,8 @@
                 entryPrice: trade.entryPrice,
                 closePrice: closePrice,
                 goldPrice: currentPrice,
-                lotSize: trade.lotSize
+                lotSize: trade.lotSize,
+                tradeIndex: trade.tradeIndex // Thêm index để tham chiếu
             });
 
             localStorage.setItem('balanceHistory', JSON.stringify(balanceHistory));
@@ -724,46 +857,58 @@
             );
         }
 
-        // Phân tích hiệu suất
-        function analyzeBalanceHistory() {
-            if (!balanceHistory || balanceHistory.length === 0) {
-                alert("Không có dữ liệu giao dịch!");
-                return;
+        // Cập nhật thống kê gợi ý (Mới)
+        function updateSuggestionStats(trade, profit) {
+            const currentTradeIndex = trade.tradeIndex;
+
+            // Kiểm tra gợi ý BUY gần nhất
+            if (suggestionStats.BUY.lastTradeIndex === -1 || currentTradeIndex > suggestionStats.BUY.lastTradeIndex) {
+                if (suggestionStats.BUY.lastTradeIndex !== -1 && trade.type === 'BUY') {
+                    suggestionStats.BUY.total++;
+                    if (profit > 0) {
+                        suggestionStats.BUY.correct++;
+                    }
+                    suggestionStats.BUY.lastTradeIndex = currentTradeIndex;
+                }
             }
 
-            let max = balanceHistory[0];
-            let min = balanceHistory[0];
-            let totalProfit = 0;
-            let totalGoldPrice = 0;
-            let tradesCount = balanceHistory.length;
-
-            balanceHistory.forEach(item => {
-                if (item.balance > max.balance) max = item;
-                if (item.balance < min.balance) min = item;
-                totalProfit += item.profit;
-                totalGoldPrice += item.goldPrice;
-            });
-
-            const first = balanceHistory[0];
-            const maxDuration = ((new Date(max.time) - new Date(first.time)) / 1000).toFixed(0);
-            const minDuration = ((new Date(min.time) - new Date(first.time)) / 1000).toFixed(0);
-            const avgProfit = (totalProfit / tradesCount).toFixed(2);
-            const avgGoldPrice = (totalGoldPrice / tradesCount).toFixed(2);
-            const profitToGoldRatio = ((totalProfit / tradesCount) / avgGoldPrice * 100).toFixed(2);
-
-            alert(
-                `📈 Số dư cao nhất: ${max.balance.toFixed(2)} USD lúc ${max.time.toLocaleString()} (Giá vàng: ${max.goldPrice.toFixed(2)} USD)\n` +
-                `⏱️ Mất ${maxDuration} giây kể từ lúc bắt đầu\n\n` +
-                `📉 Số dư thấp nhất: ${min.balance.toFixed(2)} USD lúc ${min.time.toLocaleString()} (Giá vàng: ${min.goldPrice.toFixed(2)} USD)\n` +
-                `⏱️ Mất ${minDuration} giây kể từ lúc bắt đầu\n\n` +
-                `💰 Lợi nhuận trung bình mỗi lệnh: ${avgProfit} USD\n` +
-                `🌟 Giá vàng trung bình: ${avgGoldPrice} USD\n` +
-                `📊 Tỷ lệ lợi nhuận so với giá vàng: ${profitToGoldRatio}%`
-            );
+            // Kiểm tra gợi ý SELL gần nhất
+            if (suggestionStats.SELL.lastTradeIndex === -1 || currentTradeIndex > suggestionStats.SELL.lastTradeIndex) {
+                if (suggestionStats.SELL.lastTradeIndex !== -1 && trade.type === 'SELL') {
+                    suggestionStats.SELL.total++;
+                    if (profit > 0) {
+                        suggestionStats.SELL.correct++;
+                    }
+                    suggestionStats.SELL.lastTradeIndex = currentTradeIndex;
+                }
+            }
+            
+            localStorage.setItem('suggestionStats', JSON.stringify(suggestionStats));
+            updateSuggestionStatsDisplay();
         }
 
-        // Vẽ biểu đồ số dư và giá vàng
+        // Cập nhật hiển thị thống kê gợi ý (Mới)
+        function updateSuggestionStatsDisplay() {
+            const buyTotal = suggestionStats.BUY.total;
+            const buyCorrect = suggestionStats.BUY.correct;
+            const sellTotal = suggestionStats.SELL.total;
+            const sellCorrect = suggestionStats.SELL.correct;
+
+            const buyPct = buyTotal > 0 ? ((buyCorrect / buyTotal) * 100).toFixed(2) : '0.00';
+            const sellPct = sellTotal > 0 ? ((sellCorrect / sellTotal) * 100).toFixed(2) : '0.00';
+
+            document.getElementById('statBuyTotal').textContent = buyTotal;
+            document.getElementById('statBuyCorrect').textContent = buyCorrect;
+            document.getElementById('statBuyPct').textContent = buyPct + '%';
+
+            document.getElementById('statSellTotal').textContent = sellTotal;
+            document.getElementById('statSellCorrect').textContent = sellCorrect;
+            document.getElementById('statSellPct').textContent = sellPct + '%';
+        }
+
+        // Vẽ biểu đồ số dư và giá vàng (Giữ nguyên)
         function drawBalanceChart() {
+            // ... (Giữ nguyên)
             if (!balanceHistory || balanceHistory.length === 0) {
                 if (balanceChart) balanceChart.destroy();
                 return;
@@ -830,11 +975,112 @@
 
             setTimeout(() => {
                 detectBalanceGoldIntersections();
+                checkSuggestion(); // Kích hoạt kiểm tra gợi ý sau khi vẽ biểu đồ
             }, 100);
         }
 
-        // Phát hiện giao nhau giữa số dư và giá vàng
+        // Logic Gợi ý giao dịch (Mới)
+        function checkSuggestion() {
+            const dsBalance = balanceChart.data.datasets[0].data;
+            const dsGold = balanceChart.data.datasets[1].data;
+            const len = Math.min(dsBalance.length, dsGold.length);
+            const { minSlope, minGapPct, confirmDelay, suggestionMode } = suggestionSettings;
+
+            if (len < confirmDelay + 1) return;
+
+            // Lấy dữ liệu gần nhất (chú ý: đây là dữ liệu từ Balance History, không phải real-time)
+            const i = len - 1;
+            const balanceNow = dsBalance[i];
+            const goldNow = dsGold[i];
+            const balancePrev = dsBalance[i - confirmDelay];
+            const goldPrev = dsGold[i - confirmDelay];
+            
+            const timeLabel = balanceChart.data.labels[i];
+            
+            let suggestion = null;
+            let reason = '';
+            
+            // Tính toán độ dốc (Slope) trung bình trong khoảng confirmDelay
+            // (Đơn vị: USD/điểm dữ liệu, có thể không chính xác về thời gian thực)
+            const balanceSlope = (balanceNow - balancePrev) / confirmDelay;
+            const goldSlope = (goldNow - goldPrev) / confirmDelay;
+
+            // Tính khoảng cách phần trăm (Gap Percentage)
+            const gapPct = ((balanceNow - goldNow) / goldNow) * 100;
+            const prevGapPct = ((balancePrev - goldPrev) / goldPrev) * 100;
+
+            const isCrossoverUp = (prevGapPct < 0 && gapPct >= 0); // Vàng cắt lên Số dư
+            const isCrossoverDown = (prevGapPct > 0 && gapPct <= 0); // Vàng cắt xuống Số dư
+
+            // 1. Logic Cắt Lên/Xuống & Xu hướng (Gợi ý MUA/BÁN)
+            if (isCrossoverUp) {
+                if (goldSlope > minSlope) {
+                    suggestion = 'BUY';
+                    reason = 'Giá Vàng cắt lên Số Dư và tăng mạnh.';
+                } else if (goldSlope > 0) {
+                    suggestion = 'BUY';
+                    reason = 'Giá Vàng cắt lên Số Dư (xu hướng tăng).';
+                }
+            } else if (isCrossoverDown) {
+                if (goldSlope < -minSlope) {
+                    suggestion = 'SELL';
+                    reason = 'Giá Vàng cắt xuống Số Dư và giảm mạnh.';
+                } else if (goldSlope < 0) {
+                    suggestion = 'SELL';
+                    reason = 'Giá Vàng cắt xuống Số Dư (xu hướng giảm).';
+                }
+            }
+            
+            // 2. Logic Đảo Chiều (Gợi ý MUA/BÁN Mạnh)
+            if (!suggestion) {
+                // Đảo chiều MUA: Vàng đã nằm dưới Số dư, nhưng đang tăng mạnh
+                if (gapPct < -minGapPct && goldSlope > minSlope * 2) { 
+                    suggestion = 'STRONG BUY';
+                    reason = 'Giá Vàng giảm sâu dưới Số Dư, khả năng bật tăng mạnh.';
+                }
+                // Đảo chiều BÁN: Vàng đã nằm trên Số dư, nhưng đang giảm mạnh
+                else if (gapPct > minGapPct && goldSlope < -minSlope * 2) {
+                    suggestion = 'STRONG SELL';
+                    reason = 'Giá Vàng tăng cao trên Số Dư, khả năng đảo chiều giảm mạnh.';
+                }
+            }
+
+            // Lọc theo Chế độ hiển thị
+            if (suggestionMode !== 'all') {
+                if (suggestion && !suggestion.includes(suggestionMode.toUpperCase())) {
+                    suggestion = null;
+                }
+            }
+
+            // Cập nhật màn hình & Thống kê
+            if (suggestion && suggestionStats[suggestion.replace('STRONG ', '')].lastIndex !== i) {
+                const type = suggestion.includes('BUY') ? 'BUY' : 'SELL';
+                
+                // Cập nhật thống kê và đánh dấu đã gợi ý tại điểm này
+                suggestionStats[type].lastIndex = i;
+                suggestionStats[type].lastTime = timeLabel;
+                
+                localStorage.setItem('suggestionStats', JSON.stringify(suggestionStats));
+                
+                // Hiển thị
+                const display = document.getElementById('suggestionDisplay');
+                const className = suggestion.includes('BUY') ? 'suggest-buy' : 'suggest-sell';
+                display.innerHTML = `<div class="${className}">${timeLabel} | **${suggestion}** | Lý do: ${reason}</div>`;
+                
+                logStatus(`📢 ${suggestion} Gợi ý | Lý do: ${reason}`);
+                playNotificationSound(suggestionSound || alertSound);
+                
+                // Cập nhật chỉ số lệnh gần nhất
+                // Điều này giúp hàm updateSuggestionStats biết lệnh nào là lệnh tiếp theo sau gợi ý
+                suggestionStats[type].lastTradeIndex = tradesToday; 
+            } else if (suggestion === null) {
+                 document.getElementById('suggestionDisplay').innerHTML = 'Chưa có gợi ý nào.';
+            }
+        }
+
+        // Phát hiện giao nhau giữa số dư và giá vàng (Giữ nguyên)
         function detectBalanceGoldIntersections() {
+            // ... (Giữ nguyên)
             if (!balanceChart) return;
             
             const dsBalance = balanceChart.data.datasets[0].data;
@@ -877,8 +1123,9 @@
             }
         }
 
-        // Cập nhật thông tin lệnh
+        // Cập nhật thông tin lệnh (Giữ nguyên)
         function updateTradeInfo() {
+            // ... (Giữ nguyên)
             const container = document.getElementById('currentTradeDetails');
             container.innerHTML = '';
             
@@ -911,9 +1158,10 @@
                 container.appendChild(tradeBox);
             });
         }
-
-        // Cập nhật trạng thái
+        
+        // Cập nhật trạng thái (Giữ nguyên)
         function updateStatus(extra = "") {
+            // ... (Giữ nguyên)
             let status = autoTradingActive ? "Đang giao dịch tự động" : "Đã dừng";
             if (extra) status += " | " + extra;
             
@@ -922,8 +1170,9 @@
             document.getElementById('tradesCount').textContent = tradesToday;
         }
 
-        // Thêm vào lịch sử
+        // Thêm vào lịch sử (Giữ nguyên)
         function addHistory(message) {
+            // ... (Giữ nguyên)
             const now = new Date();
             const timeString = now.toLocaleTimeString('vi-VN');
             
@@ -935,25 +1184,17 @@
             historyList.insertBefore(historyItem, historyList.firstChild);
         }
 
-        // Xóa lịch sử
-        function clearHistory() {
-            document.getElementById('historyList').innerHTML = '';
-            balanceHistory = [];
-            localStorage.removeItem('balanceHistory');
-            drawBalanceChart();
-            saveTradingSettings();
-            logStatus('🧹 Đã xóa lịch sử giao dịch');
-        }
-
         // Khởi động ứng dụng
         window.onload = function() {
             initChart();
             connectWebSocket();
             loadSoundSettings();
             loadTradingSettings();
+            loadSuggestionSettings(); // Tải cài đặt gợi ý
             updateStatus();
             addHistory('🔄 Ứng dụng khởi động');
             
+            // Listeners cho Cài đặt giao dịch
             ['virtualBalance', 'leverage', 'lotSize', 'stopLoss', 'takeProfit'].forEach(id => {
                 document.getElementById(id).addEventListener('change', saveTradingSettings);
             });
@@ -963,6 +1204,11 @@
             document.getElementById('useGlobalSound').addEventListener('change', function() {
                 useGlobalSound = this.checked;
                 localStorage.setItem('useGlobalSound', useGlobalSound ? '1' : '0');
+            });
+            
+            // Listeners cho Cài đặt Gợi ý
+            ['minSlope', 'minGapPct', 'confirmDelay', 'suggestionMode'].forEach(id => {
+                document.getElementById(id).addEventListener('change', saveSuggestionSettings);
             });
         };
     </script>
