@@ -455,7 +455,10 @@
                         drawBalanceChart(); // Sẽ gọi detectBalanceGoldIntersections và checkSuggestion
                         checkPriceAlerts(oldPrice, newPrice);
                         
-                        if (autoTradingActive && currentTrades.length > 0) updateTradeInfo();
+                        // THÊM DÒNG NÀY: Luôn cập nhật thông tin lệnh khi giá thay đổi
+                        if (currentTrades.length > 0) {
+                            updateTradeInfo();
+                        }
                     }
                 };
                 
@@ -590,7 +593,6 @@
 
         // Lưu cài đặt giao dịch
         function saveTradingSettings() {
-            // ... (Giữ nguyên)
             const settings = {
                 virtualBalance: parseFloat(document.getElementById('virtualBalance').value),
                 leverage: parseInt(document.getElementById('leverage').value),
@@ -605,7 +607,6 @@
 
         // Tải cài đặt giao dịch
         function loadTradingSettings() {
-            // ... (Giữ nguyên)
             const settings = JSON.parse(localStorage.getItem('tradingSettings'));
             if (settings) {
                 document.getElementById('virtualBalance').value = settings.virtualBalance;
@@ -677,15 +678,22 @@
             logStatus('🔄 Đã reset dữ liệu về trạng thái ban đầu');
         }
 
-        // Bắt đầu/Dừng giao dịch tự động (Giữ nguyên)
+        // Bắt đầu giao dịch tự động
         function startAutoTrading() {
             if (autoTradingActive) return;
-            // ... (Giữ nguyên)
+            
             virtualBalance = parseFloat(document.getElementById('virtualBalance').value);
             autoTradingActive = true;
             saveTradingSettings();
             
             updateStatus();
+            
+            // Interval cập nhật giao diện mỗi giây (backup)
+            tradingInterval = setInterval(() => {
+                if (currentTrades.length > 0) {
+                    updateTradeInfo();
+                }
+            }, 1000);
             
             if (currentTrades.length === 0) {
                 const waitForPrice = setInterval(() => {
@@ -696,12 +704,10 @@
                 }, 500);
             }
             
-            tradingInterval = setInterval(checkTrades, 1000);
             logStatus('🚀 Bắt đầu giao dịch tự động');
         }
 
         function stopAutoTrading() {
-            // ... (Giữ nguyên)
             autoTradingActive = false;
             clearInterval(tradingInterval);
             saveTradingSettings();
@@ -709,9 +715,8 @@
             logStatus('🛑 Dừng giao dịch tự động');
         }
 
-        // Tạo lệnh mới (Giữ nguyên)
+        // Tạo lệnh mới
         function createNewTrades() {
-            // ... (Giữ nguyên)
              if (!autoTradingActive || currentPrice === 0 || virtualBalance < 100) {
                 stopAutoTrading();
                 return;
@@ -759,9 +764,8 @@
             saveTradingSettings();
         }
         
-        // Kiểm tra điều kiện đóng lệnh (Giữ nguyên)
+        // Kiểm tra điều kiện đóng lệnh
         function checkTrades() {
-             // ... (Giữ nguyên)
             if (!autoTradingActive || currentTrades.length === 0 || isWaitingNewTrades) return;
             
             let allClosed = true;
@@ -906,9 +910,8 @@
             document.getElementById('statSellPct').textContent = sellPct + '%';
         }
 
-        // Vẽ biểu đồ số dư và giá vàng (Giữ nguyên)
+        // Vẽ biểu đồ số dư và giá vàng
         function drawBalanceChart() {
-            // ... (Giữ nguyên)
             if (!balanceHistory || balanceHistory.length === 0) {
                 if (balanceChart) balanceChart.destroy();
                 return;
@@ -1078,9 +1081,8 @@
             }
         }
 
-        // Phát hiện giao nhau giữa số dư và giá vàng (Giữ nguyên)
+        // Phát hiện giao nhau giữa số dư và giá vàng
         function detectBalanceGoldIntersections() {
-            // ... (Giữ nguyên)
             if (!balanceChart) return;
             
             const dsBalance = balanceChart.data.datasets[0].data;
@@ -1123,18 +1125,20 @@
             }
         }
 
-        // Cập nhật thông tin lệnh (Giữ nguyên)
+        // Cập nhật thông tin lệnh
         function updateTradeInfo() {
-            // ... (Giữ nguyên)
             const container = document.getElementById('currentTradeDetails');
+            if (!container) return;
+            
             container.innerHTML = '';
             
             currentTrades.forEach(trade => {
-                const price = currentPrice;
+                const price = currentPrice; // Đảm bảo dùng currentPrice mới nhất
                 let profit = 0;
                 let profitClass = '';
                 
                 if (!trade.closed) {
+                    // Tính lợi nhuận hiện tại
                     profit = trade.type === 'BUY'
                         ? (price - trade.entryPrice) * trade.lotSize * trade.leverage
                         : (trade.entryPrice - price) * trade.lotSize * trade.leverage;
@@ -1159,9 +1163,8 @@
             });
         }
         
-        // Cập nhật trạng thái (Giữ nguyên)
+        // Cập nhật trạng thái
         function updateStatus(extra = "") {
-            // ... (Giữ nguyên)
             let status = autoTradingActive ? "Đang giao dịch tự động" : "Đã dừng";
             if (extra) status += " | " + extra;
             
@@ -1170,9 +1173,8 @@
             document.getElementById('tradesCount').textContent = tradesToday;
         }
 
-        // Thêm vào lịch sử (Giữ nguyên)
+        // Thêm vào lịch sử
         function addHistory(message) {
-            // ... (Giữ nguyên)
             const now = new Date();
             const timeString = now.toLocaleTimeString('vi-VN');
             
@@ -1182,6 +1184,20 @@
             historyItem.innerHTML = `<strong>${timeString}:</strong> ${message}`;
             
             historyList.insertBefore(historyItem, historyList.firstChild);
+        }
+
+        // Hàm kiểm tra kết nối WebSocket để debug
+        function checkWebSocketStatus() {
+            if (!ws) {
+                console.log('WebSocket chưa được khởi tạo');
+                return false;
+            }
+            
+            console.log('WebSocket state:', ws.readyState);
+            console.log('Current price:', currentPrice);
+            console.log('Active trades:', currentTrades.length);
+            
+            return ws.readyState === WebSocket.OPEN;
         }
 
         // Khởi động ứng dụng
