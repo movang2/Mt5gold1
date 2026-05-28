@@ -5,7 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
     <title>Giao Dịch Vàng Pro - XAU/USD | Lịch sử giao nhau & Biểu đồ</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <!-- Firebase SDKs compat -->
     <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
@@ -229,7 +228,6 @@
         </div>
     </div>
 
-    <!-- Cloud sync -->
     <div class="cloud-panel">
         <div style="font-weight:700;">☁️ ĐỒNG BỘ DỮ LIỆU CLOUD</div>
         <div class="flex-buttons">
@@ -256,7 +254,6 @@
         <div class="chart-container"><canvas id="balanceChart"></canvas></div>
     </div>
     
-    <!-- Lịch sử giao nhau riêng biệt -->
     <div class="two-col-grid">
         <div class="panel">
             <div class="panel-title">🔁 CÁC ĐIỂM GIAO NHAU (Số dư - Giá vàng)</div>
@@ -450,16 +447,19 @@
         });
     }
     
-    // Biểu đồ số dư & giá vàng - fix lỗi Invalid Date
+    // Biểu đồ số dư & giá vàng - TÍNH TOÁN THEO PIXEL (NHƯ BẢN CŨ)
     function drawBalanceChart() {
         const ctx = document.getElementById('balanceChart').getContext('2d');
         if(balanceChartInstance) balanceChartInstance.destroy();
         if(!balanceHistory.length) return;
+        
         const labels = balanceHistory.map(h => {
-            let d = new Date(h.time);
-            if(isNaN(d.getTime())) return "??:??:??";
+            let timeVal = isNaN(h.time) ? h.time : parseInt(h.time);
+            let d = new Date(timeVal);
+            if(isNaN(d.getTime())) return new Date().toLocaleTimeString('vi-VN');
             return d.toLocaleTimeString('vi-VN');
         });
+        
         const balances = balanceHistory.map(h => h.balance);
         const golds = balanceHistory.map(h => h.goldPrice);
         balanceChartInstance = new Chart(ctx, {
@@ -476,30 +476,49 @@
                 scales: { y: { title: { display: true, text: 'Số dư USD' } }, y1: { position: 'right', title: { text: 'Giá Vàng' }, grid: { drawOnChartArea: false } } }
             }
         });
-        // Sau khi vẽ, phát hiện giao nhau (dựa trên dữ liệu thực tế không phải pixel)
-        detectCrossFromData(balances, golds, labels);
+        
+        // Gọi hàm kiểm tra giao nhau dựa trên Tọa độ Pixel ngay sau khi render xong biểu đồ
+        detectBalanceGoldIntersections(balanceChartInstance, balances, golds, labels);
     }
     
-    // Phát hiện giao nhau dựa trên giá trị số dư và giá vàng, thêm vào lịch sử riêng
-    function detectCrossFromData(balances, golds, timeLabels) {
-        if(balances.length < 2 || golds.length < 2) return;
-        const len = Math.min(balances.length, golds.length);
-        for(let i=1; i<len; i++) {
-            const prevDiff = balances[i-1] - golds[i-1];
-            const curDiff = balances[i] - golds[i];
-            // Kiểm tra cắt nhau
+    // LOGIC TOÁN HỌC DỰA TRÊN PIXEL BIỂU ĐỒ - LẤY TỪ BẢN CŨ SANG
+    function detectBalanceGoldIntersections(chart, dsBalance, dsGold, timeLabels) {
+        if (!chart || dsBalance.length < 2 || dsGold.length < 2) return;
+
+        const scaleL = chart.scales.y;
+        const scaleR = chart.scales.y1;
+        if (!scaleL || !scaleR) return;
+
+        const len = Math.min(dsBalance.length, dsGold.length);
+
+        for (let i = 1; i < len; i++) {
+            // Quy đổi giá trị số thực tế thành tọa độ Pixel (vị trí hiển thị) trên màn hình
+            const prevBalPx = scaleL.getPixelForValue(dsBalance[i - 1]);
+            const prevGoldPx = scaleR.getPixelForValue(dsGold[i - 1]);
+            const curBalPx = scaleL.getPixelForValue(dsBalance[i]);
+            const curGoldPx = scaleR.getPixelForValue(dsGold[i]);
+
+            const prevDiff = prevBalPx - prevGoldPx;
+            const curDiff = curBalPx - curGoldPx;
+
+            // Điều kiện cắt nhau dựa trên Pixel màn hình hiển thị
             const crossed = (prevDiff < 0 && curDiff > 0) || (prevDiff > 0 && curDiff < 0) || prevDiff === 0 || curDiff === 0;
-            if(crossed) {
+
+            if (crossed) {
                 const idxKey = i;
-                if(!alertedIntersectionIndices.has(idxKey)) {
+                if (!alertedIntersectionIndices.has(idxKey)) {
                     alertedIntersectionIndices.add(idxKey);
-                    const balanceVal = balances[i];
-                    const goldVal = golds[i];
+
+                    const balanceVal = dsBalance[i];
+                    const goldVal = dsGold[i];
                     const timeLabel = (timeLabels[i] && timeLabels[i] !== "??:??:??") ? timeLabels[i] : new Date().toLocaleTimeString('vi-VN');
-                    addIntersectionEvent(balanceVal, goldVal, `Giao nhau tại thời điểm ${timeLabel} | Dư: ${balanceVal.toFixed(2)} | Vàng: ${goldVal.toFixed(2)}`);
-                    addHistory(`🔁 GIAO NHAU #${intersectionHistory.length+1}: Số dư = ${balanceVal.toFixed(2)} | Giá vàng = ${goldVal.toFixed(2)}`, false);
-                    // tự động sync cloud khi giao nhau
-                    if(currentUser) uploadToCloudSilent();
+
+                    // Ghi log vào danh sách giao nhau riêng và phát âm thanh
+                    addIntersectionEvent(balanceVal, goldVal, `Giao nhau Pixel tại ${timeLabel} | Dư: ${balanceVal.toFixed(2)} | Vàng: ${goldVal.toFixed(2)}`);
+                    addHistory(`🔁 GIAO NHAU PIXEL #${intersectionHistory.length}: Số dư = ${balanceVal.toFixed(2)} | Giá vàng = ${goldVal.toFixed(2)}`, false);
+                    
+                    // Tự động đồng bộ lên Firebase Cloud khi xảy ra giao nhau
+                    if (currentUser) uploadToCloudSilent();
                 }
             }
         }
@@ -575,12 +594,24 @@
                 t.profit = profit;
                 virtualBalance += profit;
                 tradesToday++;
+                
                 const recordTime = new Date();
-                const record = { time: recordTime, balance:virtualBalance, profit:profit, reason:reason, type:t.type, entryPrice:t.entryPrice, closePrice:currentPrice, goldPrice:currentPrice, lotSize:t.lotSize };
+                const record = { 
+                    time: recordTime.getTime(), 
+                    balance: virtualBalance, 
+                    profit: profit, 
+                    reason: reason, 
+                    type: t.type, 
+                    entryPrice: t.entryPrice, 
+                    closePrice: currentPrice, 
+                    goldPrice: currentPrice, 
+                    lotSize: t.lotSize 
+                };
+                
                 balanceHistory.push(record);
                 localStorage.setItem('balanceHistory', JSON.stringify(balanceHistory));
                 saveTradingSettings();
-                drawBalanceChart(); // vẽ lại biểu đồ -> sẽ tự động phát hiện giao nhau
+                drawBalanceChart(); // vẽ lại biểu đồ -> kích hoạt phát hiện giao nhau bằng pixel
                 if(reason === 'TAKE PROFIT') playNotifySound(tpSound);
                 else playNotifySound(slSound);
                 const profitSign = profit>=0 ? '+' : '';
