@@ -3,9 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
-    <title>Giao Dịch Vàng Pro - XAU/USD | Ngắt API & Cloud Sync</title>
+    <title>Giao Dịch Vàng Pro - XAU/USD | Firebase v9+ & Ngắt API</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <!-- Firebase SDKs -->
+    <!-- Firebase SDKs modular compat (ổn định với code cũ) -->
     <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
@@ -62,11 +62,6 @@
             font-weight: 800;
             color: #b8860b;
             letter-spacing: 1px;
-        }
-        .api-toggle {
-            position: absolute;
-            top: 12px;
-            right: 20px;
         }
         .grid-2col {
             display: flex;
@@ -186,7 +181,7 @@
 <body>
 <div class="container">
     <h1>🥇 GIAO DỊCH VÀNG XAU/USD · AI TRADER 
-        <button id="toggleApiBtn" class="warning" style="font-size:14px;">🔌 NGẮT API GIÁ</button>
+        <button id="toggleApiBtn" class="warning" style="font-size:14px;">⛔ NGẮT API GIÁ</button>
     </h1>
     
     <div class="status-bar" id="tradingStatus">
@@ -198,7 +193,6 @@
     
     <div class="price-display">
         💎 XAU/USD hiện tại: <span id="currentPrice">0.00</span> USD
-        <div class="api-toggle"></div>
     </div>
     
     <div class="grid-2col">
@@ -231,7 +225,7 @@
         </div>
     </div>
 
-    <!-- Cloud sync control -->
+    <!-- Cloud sync control với Firebase config đầy đủ (storageBucket, messagingSenderId) -->
     <div class="cloud-panel" id="cloudPanel">
         <div style="font-weight:700;">☁️ ĐỒNG BỘ DỮ LIỆU CLOUD (Firestore)</div>
         <div class="flex-buttons">
@@ -246,6 +240,10 @@
             <button onclick="stopAutoUpload()" class="danger">🛑 Dừng auto</button>
         </div>
         <div id="cloudStatus" style="font-size:12px; color:#2c3e66;">🔐 Chưa đăng nhập</div>
+        <div class="flex-buttons" style="margin-top:8px;">
+            <button onclick="loginGoogle()" style="background:#4285f4; color:white;">🔑 Đăng nhập Google</button>
+            <button onclick="logout()" style="background:#6c757d; color:white;">🚪 Đăng xuất</button>
+        </div>
     </div>
     
     <div class="panel">
@@ -270,7 +268,21 @@
 </div>
 
 <script>
-    // ---------- Biến toàn cục ----------
+    // ------------------- CẤU HÌNH FIREBASE CHUẨN (đầy đủ các thông số) -------------------
+    const firebaseConfig = {
+        apiKey: "AIzaSyC3ArgRBdzrj-Njnq6A9KB--9LT45LUNJ8",
+        authDomain: "yt-srt-sync.firebaseapp.com",
+        projectId: "yt-srt-sync",
+        storageBucket: "yt-srt-sync.firebasestorage.app",
+        messagingSenderId: "64219190974",
+        appId: "1:64219190974:web:ae6ca30879b9c654d4b0ef"
+    };
+    // Khởi tạo Firebase (dùng compat để tương thích code hiện tại)
+    firebase.initializeApp(firebaseConfig);
+    const auth = firebase.auth();
+    const db = firebase.firestore();
+    
+    // Biến toàn cục
     const FINNHUB_API_KEY = 'd1l6t99r01qt4thebangd1l6t99r01qt4thebao0';
     let currentPrice = 0;
     let priceChart, balanceChartInstance;
@@ -283,10 +295,10 @@
     let priceHistory = [];
     let balanceHistory = JSON.parse(localStorage.getItem('balanceHistory')) || [];
     let isWaitingNewTrades = false;
-    
-    // TRẠNG THÁI NGẮT API
-    let isApiPaused = false;          // true = ngắt kết nối, không nhận giá mới
-    let manualPriceOverride = null;    // nếu ngắt API, người dùng có thể set tay nhưng hiện tại chưa cần
+    let isApiPaused = false;          // Ngắt API
+    let currentUser = null;
+    let unsubscribeRealtime = null;
+    let autoUploadIntervalId = null;
     
     // Âm thanh
     let openSound = new Audio('https://www.soundjay.com/buttons/button-21.mp3');
@@ -296,23 +308,9 @@
     let intersectionSound = null;
     let globalNotifySound = new Audio('https://www.soundjay.com/buttons/sounds/beep-07.mp3');
     let useGlobalSound = false;
-    
     let alertLevels = [];
     let alertedLevels = new Set();
     let alertedIntersectionIndices = new Set();
-    
-    // Firebase
-    const firebaseConfig = {
-      apiKey: "AIzaSyC3ArgRBdzrj-Njnq6A9KB--9LT45LUNJ8",
-      authDomain: "yt-srt-sync.firebaseapp.com",
-      projectId: "yt-srt-sync",
-    };
-    firebase.initializeApp(firebaseConfig);
-    const auth = firebase.auth();
-    const db = firebase.firestore();
-    let currentUser = null;
-    let unsubscribeRealtime = null;
-    let autoUploadIntervalId = null;
     
     // Helper UI
     function updateUI() {
@@ -340,29 +338,23 @@
     
     function logStatus(msg) { console.log(msg); addHistory(msg); }
     
-    // ------------------- WEBSOCKET (có hỗ trợ ngắt/bật) -------------------
+    // WebSocket với tính năng ngắt/bật
     function connectWebSocket() {
-        if(ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) {
-            if(isApiPaused) {
-                // Nếu đang ngắt API mà ws vẫn mở => đóng để thực sự ngắt
-                if(ws.readyState === WebSocket.OPEN) {
-                    ws.close();
-                    logStatus("🔌 API ngắt: Đã đóng kết nối WebSocket theo yêu cầu");
-                }
+        if(isApiPaused) {
+            if(ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) {
+                ws.close();
+                ws = null;
             }
             return;
         }
-        if(isApiPaused) {
-            logStatus("⛔ API đang ở chế độ ngắt, không kết nối WebSocket");
-            return;
-        }
+        if(ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) return;
         ws = new WebSocket(`wss://ws.finnhub.io?token=${FINNHUB_API_KEY}`);
         ws.onopen = () => {
             ws.send(JSON.stringify({type:'subscribe', symbol:'OANDA:XAU_USD'}));
-            logStatus('🔌 WebSocket kết nối - nhận giá vàng (API hoạt động)');
+            logStatus('🔌 WebSocket kết nối - nhận giá vàng');
         };
         ws.onmessage = (ev) => {
-            if(isApiPaused) return; // không xử lý giá khi đang ngắt
+            if(isApiPaused) return;
             try {
                 const data = JSON.parse(ev.data);
                 if(data.type === 'trade' && data.data && data.data.length){
@@ -381,30 +373,22 @@
                 }
             } catch(e){}
         };
-        ws.onclose = () => { 
-            if(!isApiPaused) setTimeout(connectWebSocket, 3000); 
-        };
-        ws.onerror = (err) => { console.warn("WS error", err); };
+        ws.onclose = () => { if(!isApiPaused) setTimeout(connectWebSocket, 3000); };
     }
     
-    // Hàm toggle ngắt/bật API
     function toggleApiConnection() {
         isApiPaused = !isApiPaused;
         if(isApiPaused) {
-            // Ngắt: đóng WebSocket nếu đang mở
             if(ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) {
                 ws.close();
                 ws = null;
             }
             addHistory("🔴 ĐÃ NGẮT API GIÁ VÀNG: không nhận cập nhật giá mới.");
-            logStatus("⚠️ Người dùng ngắt kết nối API giá vàng");
         } else {
-            // Bật lại: khởi tạo lại kết nối
             addHistory("🟢 BẬT LẠI API: bắt đầu nhận giá vàng thời gian thực.");
             connectWebSocket();
         }
         updateUI();
-        // Cập nhật nút giao diện
         const toggleBtn = document.getElementById('toggleApiBtn');
         if(isApiPaused) {
             toggleBtn.innerHTML = "🔌 BẬT API GIÁ";
@@ -504,8 +488,8 @@
         const lev = parseInt(document.getElementById('leverage').value);
         const price = currentPrice;
         currentTrades = [
-            { type:'BUY', entryPrice:price, entryTime:new Date().toLocaleString(), stopLoss:price - slVal, takeProfit:price + tpVal, lotSize:lot, leverage:lev, closed:false, profitCalc:0 },
-            { type:'SELL', entryPrice:price, entryTime:new Date().toLocaleString(), stopLoss:price + slVal, takeProfit:price - tpVal, lotSize:lot, leverage:lev, closed:false, profitCalc:0 }
+            { type:'BUY', entryPrice:price, entryTime:new Date().toLocaleString(), stopLoss:price - slVal, takeProfit:price + tpVal, lotSize:lot, leverage:lev, closed:false },
+            { type:'SELL', entryPrice:price, entryTime:new Date().toLocaleString(), stopLoss:price + slVal, takeProfit:price - tpVal, lotSize:lot, leverage:lev, closed:false }
         ];
         document.getElementById('activeTrades').style.display = 'block';
         updateTradeInfoDisplay();
@@ -611,7 +595,7 @@
         alert(`📊 Hiệu suất:\nMax dư: ${maxB.balance.toFixed(2)} USD\nMin dư: ${minB.balance.toFixed(2)} USD\nTổng lợi nhuận: ${totalProfit.toFixed(2)} USD\nSố lệnh: ${balanceHistory.length}`);
     }
     function resetData(){
-        if(confirm('Reset toàn bộ dữ liệu? Mất lịch sử và cài đặt âm thanh')) {
+        if(confirm('Reset toàn bộ dữ liệu?')) {
             localStorage.clear();
             balanceHistory = []; virtualBalance=1000; tradesToday=0; currentTrades=[];
             localStorage.setItem('balanceHistory', JSON.stringify(balanceHistory));
@@ -643,7 +627,7 @@
     function loadSoundSettings(){ useGlobalSound = localStorage.getItem('useGlobalSound') === 'true'; document.getElementById('useGlobalSound').checked = useGlobalSound; }
     function updateAlertLevels(){ const txt = document.getElementById('alertPrices').value; alertLevels = txt.split(',').map(v=>parseFloat(v.trim())).filter(v=>!isNaN(v)); alertedLevels.clear(); }
     
-    // Auth
+    // Firebase Auth handlers
     function loginGoogle(){ auth.signInWithPopup(new firebase.auth.GoogleAuthProvider()); }
     function logout(){ auth.signOut(); }
     auth.onAuthStateChanged(user=>{
@@ -666,6 +650,7 @@
         } else { box.innerHTML = "🔐 Chưa đăng nhập, login để dùng Cloud"; if(unsubscribeRealtime) unsubscribeRealtime(); }
     });
     
+    // Khởi chạy
     window.onload = ()=>{
         initPriceChart();
         connectWebSocket();
@@ -675,14 +660,16 @@
         document.getElementById('alertPrices').addEventListener('change', updateAlertLevels);
         updateUI();
         drawBalanceChart();
-        // Gán nút toggle
         const toggleBtn = document.getElementById('toggleApiBtn');
         toggleBtn.onclick = toggleApiConnection;
-        // expose global
-        window.loginGoogle = loginGoogle; window.logout = logout; window.uploadToCloud = uploadToCloud; window.downloadFromCloud = downloadFromCloud;
-        window.deleteCloudData = deleteCloudData; window.setAutoUploadInterval = setAutoUploadInterval; window.stopAutoUpload = stopAutoUpload;
-        window.startAutoTrading = startAutoTrading; window.stopAutoTrading = stopAutoTrading; window.analyzeBalanceHistory = analyzeBalanceHistory;
-        window.resetData = resetData; window.clearHistory = clearHistory; window.saveAllSoundSettings = saveAllSoundSettings; window.saveAlertSound = saveAlertSound;
+        // export global functions
+        window.loginGoogle = loginGoogle; window.logout = logout;
+        window.uploadToCloud = uploadToCloud; window.downloadFromCloud = downloadFromCloud;
+        window.deleteCloudData = deleteCloudData; window.setAutoUploadInterval = setAutoUploadInterval;
+        window.stopAutoUpload = stopAutoUpload; window.startAutoTrading = startAutoTrading;
+        window.stopAutoTrading = stopAutoTrading; window.analyzeBalanceHistory = analyzeBalanceHistory;
+        window.resetData = resetData; window.clearHistory = clearHistory;
+        window.saveAllSoundSettings = saveAllSoundSettings; window.saveAlertSound = saveAlertSound;
     };
 </script>
 </body>
