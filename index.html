@@ -354,7 +354,6 @@
                         
                         updateChart();
                         drawBalanceChart();
-                        detectBalanceGoldIntersections(); // 🔔 Kiểm tra giao nhau real-time
                         checkPriceAlerts(oldPrice, newPrice);
                         
                         if (autoTradingActive && currentTrades.length > 0) updateTradeInfo();
@@ -967,5 +966,107 @@
             });
         };
     </script>
+
+<!-- FIREBASE REALTIME FULL -->
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+
+<div style="position:fixed;top:10px;right:10px;background:#fff;padding:10px;border-radius:8px;z-index:9999;">
+<button onclick="loginGoogle()">🔐 Login</button>
+<button onclick="logout()">🚪 Logout</button>
+<button onclick="forceSync()">☁️ Sync</button>
+<div id="userBox">Chưa login</div>
+</div>
+
+<script>
+const firebaseConfig = {
+  apiKey: "AIzaSyC3ArgRBdzrj-Njnq6A9KB--9LT45LUNJ8",
+  authDomain: "yt-srt-sync.firebaseapp.com",
+  projectId: "yt-srt-sync",
+};
+
+firebase.initializeApp(firebaseConfig);
+const auth = firebase.auth();
+const db = firebase.firestore();
+
+let currentUser = null;
+let unsubscribeRealtime = null;
+
+function loginGoogle(){
+  const provider = new firebase.auth.GoogleAuthProvider();
+  auth.signInWithPopup(provider);
+}
+
+function logout(){
+  auth.signOut();
+}
+
+auth.onAuthStateChanged(user=>{
+  if(user){
+    currentUser = user;
+    document.getElementById("userBox").innerText = "👤 " + user.email;
+    startRealtimeSync();
+  } else {
+    document.getElementById("userBox").innerText = "Chưa login";
+    currentUser = null;
+    if(unsubscribeRealtime) unsubscribeRealtime();
+  }
+});
+
+// UPLOAD
+function forceSync(){
+  if(!currentUser) return alert("Chưa login");
+  db.collection("users").doc(currentUser.uid).set({
+    balanceHistory: balanceHistory,
+    updatedAt: Date.now()
+  });
+}
+
+// REALTIME SYNC 2 CHIỀU
+function startRealtimeSync(){
+  if(!currentUser) return;
+
+  unsubscribeRealtime = db.collection("users")
+    .doc(currentUser.uid)
+    .onSnapshot(doc=>{
+      if(!doc.exists) return;
+
+      let data = doc.data();
+      if(!data.balanceHistory) return;
+
+      // tránh loop ghi đè
+      if(JSON.stringify(data.balanceHistory) !== JSON.stringify(balanceHistory)){
+        console.log("📥 Sync từ cloud");
+        balanceHistory = data.balanceHistory;
+        localStorage.setItem('balanceHistory', JSON.stringify(balanceHistory));
+        drawBalanceChart();
+      }
+    });
+}
+
+// AUTO SYNC KHI GIAO NHAU
+function autoSyncIfIntersect(){
+  if(balanceHistory.length < 2 || !currentUser) return;
+
+  let a = balanceHistory[balanceHistory.length-2];
+  let b = balanceHistory[balanceHistory.length-1];
+
+  if((a.balance < a.goldPrice && b.balance >= b.goldPrice) ||
+     (a.balance > a.goldPrice && b.balance <= b.goldPrice)){
+       console.log("🔥 Giao nhau → auto sync realtime");
+       forceSync();
+  }
+}
+
+// HOOK
+const oldDraw2 = drawBalanceChart;
+drawBalanceChart = function(){
+  oldDraw2();
+  autoSyncIfIntersect();
+}
+</script>
+
 </body>
 </html>
+
