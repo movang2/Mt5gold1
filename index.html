@@ -2,1071 +2,688 @@
 <html lang="vi">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Giao Dịch Vàng (XAU/USD) - Finnhub</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+    <title>Giao Dịch Vàng Pro - XAU/USD | Ngắt API & Cloud Sync</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Firebase SDKs -->
+    <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
     <style>
+        * { box-sizing: border-box; }
         body {
-            font-family: 'Arial', sans-serif;
+            font-family: 'Segoe UI', 'Arial', sans-serif;
             margin: 0;
             padding: 20px;
-            background-color: #f8f9fa;
-            color: #333;
+            background: #f0f2f5;
+            color: #1e293b;
         }
         .container {
-            max-width: 1200px;
+            max-width: 1400px;
             margin: 0 auto;
             background: white;
-            border-radius: 10px;
-            box-shadow: 0 0 20px rgba(0,0,0,0.1);
-            padding: 20px;
+            border-radius: 24px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.08);
+            padding: 24px;
         }
         h1 {
-            color: #d4af37;
+            color: #b8860b;
             text-align: center;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+        .status-bar {
+            background: #1e293b;
+            color: #f8fafc;
+            padding: 14px 20px;
+            border-radius: 60px;
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: space-between;
+            gap: 15px;
+            margin-bottom: 24px;
+            font-weight: 500;
+        }
+        .price-display {
+            background: linear-gradient(135deg, #fef9e3 0%, #fff6e0 100%);
+            border-radius: 32px;
+            padding: 18px;
+            text-align: center;
+            margin-bottom: 24px;
+            border: 1px solid #e9c46a;
+            position: relative;
+        }
+        .price-display span {
+            font-size: 32px;
+            font-weight: 800;
+            color: #b8860b;
+            letter-spacing: 1px;
+        }
+        .api-toggle {
+            position: absolute;
+            top: 12px;
+            right: 20px;
+        }
+        .grid-2col {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 24px;
             margin-bottom: 30px;
         }
         .panel {
-            background: #fafafa;
-            border-radius: 8px;
-            padding: 15px;
-            margin-bottom: 20px;
-            border: 1px solid #eee;
+            background: #ffffff;
+            border-radius: 20px;
+            padding: 20px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+            border: 1px solid #e9ecef;
+            flex: 1;
         }
         .panel-title {
-            font-size: 18px;
-            font-weight: bold;
-            margin-bottom: 15px;
-            color: #333;
-            border-bottom: 1px solid #eee;
-            padding-bottom: 10px;
+            font-size: 1.25rem;
+            font-weight: 700;
+            margin-bottom: 18px;
+            color: #0f172a;
+            border-left: 5px solid #eab308;
+            padding-left: 12px;
         }
         .control-group {
-            margin-bottom: 15px;
+            margin-bottom: 16px;
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 10px;
         }
         label {
-            display: inline-block;
-            width: 150px;
-            margin-bottom: 5px;
-            font-weight: 500;
+            width: 140px;
+            font-weight: 600;
+            color: #334155;
         }
         input, select {
             padding: 8px 12px;
-            border: 1px solid #ddd;
-            border-radius: 4px;
-            width: 200px;
+            border: 1px solid #cbd5e1;
+            border-radius: 12px;
+            background: #fefefe;
+            flex: 1;
+            min-width: 160px;
         }
         button {
-            background-color: #d4af37;
-            color: #1e2026;
+            background: #eab308;
             border: none;
-            padding: 10px 15px;
-            border-radius: 4px;
+            padding: 8px 18px;
+            border-radius: 40px;
+            font-weight: 600;
+            color: #0f172a;
             cursor: pointer;
-            font-weight: bold;
-            margin-right: 10px;
-            transition: all 0.3s;
+            transition: 0.2s;
+            margin: 4px 6px 4px 0;
         }
-        button:hover {
-            background-color: #e5c046;
-        }
-        button.danger {
-            background-color: #f6465d;
+        button:hover { background: #ca8a04; transform: scale(0.97); }
+        button.danger { background: #ef4444; color: white; }
+        button.danger:hover { background: #dc2626; }
+        button.warning { background: #f97316; color: white; }
+        button.warning:hover { background: #ea580c; }
+        .api-off-badge {
+            background: #dc2626;
             color: white;
-        }
-        button.danger:hover {
-            background-color: #ff6b81;
-        }
-        .price-display {
-            font-size: 24px;
+            border-radius: 40px;
+            padding: 4px 12px;
+            font-size: 12px;
             font-weight: bold;
-            text-align: center;
-            margin: 20px 0;
-            color: #d4af37;
+            display: inline-block;
         }
         .chart-container {
-            height: 400px;
-            margin-bottom: 30px;
-        }
-        .trade-info {
-            display: flex;
-            justify-content: space-between;
-            flex-wrap: wrap;
+            height: 350px;
+            margin-bottom: 25px;
         }
         .trade-box {
-            width: 48%;
-            background: #fff;
-            border-radius: 8px;
-            padding: 15px;
-            margin-bottom: 15px;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.05);
-            border-left: 4px solid #d4af37;
+            background: #f8fafc;
+            border-radius: 18px;
+            padding: 14px;
+            margin-bottom: 12px;
+            border-left: 6px solid #eab308;
         }
-        .trade-box.sell {
-            border-left-color: #f6465d;
-        }
-        .profit {
-            color: #0ecb81;
-            font-weight: bold;
-        }
-        .loss {
-            color: #f6465d;
-            font-weight: bold;
-        }
+        .trade-box.sell { border-left-color: #f97316; }
+        .profit { color: #10b981; font-weight: bold; }
+        .loss { color: #ef4444; font-weight: bold; }
         #historyList {
-            max-height: 300px;
+            max-height: 280px;
             overflow-y: auto;
-            border: 1px solid #eee;
-            border-radius: 4px;
-            padding: 10px;
+            background: #fefce8;
+            border-radius: 16px;
+            padding: 8px;
         }
         .history-item {
-            padding: 8px 0;
-            border-bottom: 1px solid #f5f5f5;
+            padding: 8px 12px;
+            border-bottom: 1px solid #e2e8f0;
+            font-size: 13px;
         }
-        .status-bar {
-            background: #1e2026;
-            color: white;
-            padding: 10px;
-            border-radius: 4px;
-            margin-bottom: 20px;
+        .cloud-panel {
+            background: #eef2ff;
+            border-radius: 20px;
+            padding: 16px 20px;
+            margin-top: 20px;
             display: flex;
+            flex-wrap: wrap;
+            align-items: center;
             justify-content: space-between;
+            gap: 15px;
+        }
+        .flex-buttons {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+        @media (max-width: 700px) {
+            .control-group label { width: 100%; }
+            .status-bar { flex-direction: column; border-radius: 20px; }
         }
     </style>
 </head>
 <body>
-    <div class="container">
-        <h1>Giao Dịch Vàng (XAU/USD) - Finnhub</h1>
-        
-        <div class="status-bar" id="tradingStatus">
-            <div>Trạng thái: <span id="statusText">Chưa bắt đầu</span></div>
-            <div>Số dư: <span id="balanceText">1000.00</span> USD</div>
-            <div>Lệnh hôm nay: <span id="tradesCount">0</span></div>
-        </div>
-        
-        <div class="price-display">
-            Giá XAU/USD hiện tại: <span id="currentPrice">0.00</span>
-        </div>
-        
+<div class="container">
+    <h1>🥇 GIAO DỊCH VÀNG XAU/USD · AI TRADER 
+        <button id="toggleApiBtn" class="warning" style="font-size:14px;">🔌 NGẮT API GIÁ</button>
+    </h1>
+    
+    <div class="status-bar" id="tradingStatus">
+        <div>⚙️ Trạng thái: <span id="statusText">Chưa kích hoạt</span></div>
+        <div>💰 Số dư: <span id="balanceText">1000.00</span> USD</div>
+        <div>📊 Lệnh hôm nay: <span id="tradesCount">0</span></div>
+        <div id="apiStatusBadge" style="background:#10b981; padding:4px 12px; border-radius:30px;">📡 API: Đang nhận giá</div>
+    </div>
+    
+    <div class="price-display">
+        💎 XAU/USD hiện tại: <span id="currentPrice">0.00</span> USD
+        <div class="api-toggle"></div>
+    </div>
+    
+    <div class="grid-2col">
         <div class="panel">
-            <div class="panel-title">Thiết Lập Giao Dịch</div>
-            <div class="control-group">
-                <label for="virtualBalance">Số dư ảo (USD):</label>
-                <input type="number" id="virtualBalance" value="1000" min="100">
-            </div>
-            <div class="control-group">
-                <label for="leverage">Đòn bẩy:</label>
-                <input type="number" id="leverage" value="10" min="1" max="100">
-            </div>
-            <div class="control-group">
-                <label for="lotSize">Khối lượng (lot):</label>
-                <input type="number" id="lotSize" value="0.1" min="0.01" step="0.01">
-            </div>
-            <div class="control-group">
-                <label for="stopLoss">Stop Loss (USD):</label>
-                <input type="number" id="stopLoss" value="50" min="1">
-            </div>
-            <div class="control-group">
-                <label for="takeProfit">Take Profit (USD):</label>
-                <input type="number" id="takeProfit" value="65" min="1">
-            </div>
-            <div style="margin-top: 20px;">
-                <button onclick="startAutoTrading()">Bắt Đầu Giao Dịch</button>
-                <button class="danger" onclick="stopAutoTrading()">Dừng Giao Dịch</button>
-                <button onclick="analyzeBalanceHistory()">Phân Tích Hiệu Suất</button>
-                <button class="danger" onclick="resetData()">Reset Dữ Liệu</button>
-            </div>
-        </div>
-
-        <div class="panel">
-            <div class="panel-title">Cảnh Báo Giá</div>
-            <div class="control-group">
-                <label for="alertPrices">Mốc giá (cách nhau bằng ,):</label>
-                <input type="text" id="alertPrices" placeholder="Ví dụ: 3640,3680,3569,3567">
-            </div>
-            <div class="control-group">
-                <label for="alertSoundInput">Âm thanh cảnh báo:</label>
-                <input type="file" id="alertSoundInput" accept=".mp3">
-            </div>
-            <button onclick="saveAlertSound()">Lưu âm thanh cảnh báo</button>
-        </div>
-
-        <div class="panel">
-            <div class="panel-title">Thiết Lập Âm thanh</div>
-            <div class="control-group">
-                <label for="openSoundInput">Âm thanh mở lệnh:</label>
-                <input type="file" id="openSoundInput" accept=".mp3">
-            </div>
-            <div class="control-group">
-                <label for="tpSoundInput">Âm thanh Take Profit:</label>
-                <input type="file" id="tpSoundInput" accept=".mp3">
-            </div>
-            <div class="control-group">
-                <label for="slSoundInput">Âm thanh Stop Loss:</label>
-                <input type="file" id="slSoundInput" accept=".mp3">
-            </div>
-            <div class="control-group">
-                <label for="intersectionSoundInput">Âm thanh giao nhau:</label>
-                <input type="file" id="intersectionSoundInput" accept=".mp3">
-            </div>
-            <div class="control-group">
-                <label for="globalNotifySoundInput">Âm thanh thông báo chung:</label>
-                <input type="file" id="globalNotifySoundInput" accept=".mp3">
-            </div>
-            <div class="control-group">
-                <label for="useGlobalSound">Dùng âm thanh chung:</label>
-                <input type="checkbox" id="useGlobalSound">
-            </div>
-            <div style="margin-top: 20px;">
-                <button onclick="saveAllSoundSettings()">Lưu Cấu Hình Âm Thanh</button>
+            <div class="panel-title">⚡ Cài đặt giao dịch</div>
+            <div class="control-group"><label>Số dư ảo (USD):</label><input type="number" id="virtualBalance" value="1000" min="100"></div>
+            <div class="control-group"><label>Đòn bẩy:</label><input type="number" id="leverage" value="10" min="1" max="100"></div>
+            <div class="control-group"><label>Khối lượng (lot):</label><input type="number" id="lotSize" value="0.1" step="0.01" min="0.01"></div>
+            <div class="control-group"><label>Stop Loss (USD):</label><input type="number" id="stopLoss" value="50" min="1"></div>
+            <div class="control-group"><label>Take Profit (USD):</label><input type="number" id="takeProfit" value="65" min="1"></div>
+            <div class="flex-buttons">
+                <button onclick="startAutoTrading()">▶ Bắt đầu giao dịch</button>
+                <button class="danger" onclick="stopAutoTrading()">⏹️ Dừng giao dịch</button>
+                <button onclick="analyzeBalanceHistory()">📈 Phân tích</button>
+                <button class="danger" onclick="resetData()">🔄 Reset</button>
             </div>
         </div>
         
         <div class="panel">
-            <div class="panel-title">Biểu Đồ Giá</div>
-            <div class="chart-container">
-                <canvas id="priceChart"></canvas>
-            </div>
-        </div>
-
-        <div class="panel">
-            <div class="panel-title">Biểu Đồ Số Dư & Giá Vàng</div>
-            <div class="chart-container">
-                <canvas id="balanceChart" height="300"></canvas>
-            </div>
-        </div>
-        
-        <div id="activeTrades" style="display: none;">
-            <div class="panel-title">Lệnh Hiện Tại</div>
-            <div class="trade-info" id="currentTradeDetails"></div>
-        </div>
-        
-        <div class="panel">
-            <div class="panel-title">Lịch Sử Giao Dịch</div>
-            <div id="historyList"></div>
-            <button style="margin-top: 10px;" onclick="clearHistory()">Xóa Lịch Sử</button>
+            <div class="panel-title">🔔 Cảnh báo & Âm thanh</div>
+            <div class="control-group"><label>Mốc giá (cách ,):</label><input type="text" id="alertPrices" placeholder="3640,3680,3569"></div>
+            <div class="control-group"><label>Âm thanh cảnh báo:</label><input type="file" id="alertSoundInput" accept=".mp3,.wav"></div>
+            <div class="control-group"><label>Mở lệnh:</label><input type="file" id="openSoundInput" accept="audio/*"></div>
+            <div class="control-group"><label>Take Profit:</label><input type="file" id="tpSoundInput" accept="audio/*"></div>
+            <div class="control-group"><label>Stop Loss:</label><input type="file" id="slSoundInput" accept="audio/*"></div>
+            <div class="control-group"><label>Giao nhau (Balance/Giá):</label><input type="file" id="intersectionSoundInput" accept="audio/*"></div>
+            <div class="control-group"><label>Âm thanh chung:</label><input type="file" id="globalNotifySoundInput" accept="audio/*"></div>
+            <div class="control-group"><label>🔊 Dùng âm thanh chung:</label><input type="checkbox" id="useGlobalSound"></div>
+            <div><button onclick="saveAllSoundSettings()">💾 Lưu âm thanh</button><button onclick="saveAlertSound()">📢 Lưu alert</button></div>
         </div>
     </div>
 
-    <script>
-        // Biến toàn cục
-        const FINNHUB_API_KEY = 'd1l6t99r01qt4thebangd1l6t99r01qt4thebao0';
-        let currentPrice = 0;
-        let chart;
-        let balanceChart;
-        let ws;
-        let autoTradingActive = false;
-        let tradingInterval;
-        let virtualBalance = 1000;
-        let tradesToday = 0;
-        let currentTrades = [];
-        let priceHistory = [];
-        let balanceHistory = JSON.parse(localStorage.getItem('balanceHistory')) || [];
-        let isWaitingNewTrades = false;
-        let lastUpdateTime = null;
-
-        // Âm thanh mặc định
-        let openSound = new Audio('https://www.soundjay.com/buttons/button-21.mp3');
-        let tpSound = new Audio('https://www.soundjay.com/buttons/button-09.mp3');
-        let slSound = new Audio('https://www.soundjay.com/buttons/button-10.mp3');
-        let alertSound = new Audio("https://www.soundjay.com/buttons/sounds/beep-07.mp3");
-        let intersectionSound = null;
-        let globalNotifySound = new Audio('https://www.soundjay.com/buttons/sounds/beep-07.mp3');
-        let useGlobalSound = false;
-
-        let alertLevels = [];
-        let alertedLevels = new Set();
-        let alertedIntersectionIndices = new Set();
-        
-        // Ghi log trạng thái
-        function logStatus(message) {
-            const now = new Date().toLocaleTimeString();
-            console.log(`[${now}] ${message}`);
-            addHistory(message);
-        }
-
-        // Khởi tạo biểu đồ giá và số dư
-        function initChart() {
-            const ctx = document.getElementById('priceChart').getContext('2d');
-            chart = new Chart(ctx, {
-                type: 'line',
-                data: {
-                    labels: [],
-                    datasets: [{
-                        label: 'XAU/USD',
-                        data: [],
-                        borderColor: '#d4af37',
-                        backgroundColor: 'rgba(212, 175, 55, 0.1)',
-                        tension: 0.1,
-                        fill: true
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    scales: {
-                        y: { beginAtZero: false }
-                    }
-                }
-            });
-
-            drawBalanceChart();
-        }
-
-        // Kết nối WebSocket Finnhub (ĐÃ SỬA)
-        function connectWebSocket() {
-            try {
-                if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) return;
-                
-                ws = new WebSocket(`wss://ws.finnhub.io?token=${FINNHUB_API_KEY}`);
-                
-                ws.onopen = () => {
-                    console.log('WS open - subscribing OANDA:XAU_USD');
-                    ws.send(JSON.stringify({ type: 'subscribe', symbol: 'OANDA:XAU_USD' }));
-                    addHistory('🔌 Kết nối WebSocket');
-                };
-                
-                ws.onmessage = (evt) => {
-                    let data;
-                    try { 
-                        data = JSON.parse(evt.data); 
-                    } catch(e) { 
-                        console.error('WS JSON parse error', e); 
-                        return; 
-                    }
-                    
-                    if (data && data.type === 'trade' && Array.isArray(data.data)) {
-                        const last = data.data[data.data.length - 1];
-                        if (!last || typeof last.p === 'undefined') return;
-                        
-                        const oldPrice = currentPrice;
-                        const newPrice = parseFloat(last.p);
-                        if (isNaN(newPrice)) return;
-                        
-                        currentPrice = newPrice;
-                        document.getElementById('currentPrice').textContent = newPrice.toFixed(2);
-                        lastUpdateTime = new Date();
-                        
-                        const now = new Date();
-                        priceHistory.push({ time: now.toLocaleTimeString('vi-VN'), price: newPrice });
-                        if (priceHistory.length > 200) priceHistory.shift();
-                        
-                        updateChart();
-                        drawBalanceChart();
-                        checkPriceAlerts(oldPrice, newPrice);
-                        
-                        if (autoTradingActive && currentTrades.length > 0) updateTradeInfo();
-                    }
-                };
-                
-                ws.onerror = (err) => {
-                    console.error('WS error', err);
-                    addHistory('⚠️ Lỗi WebSocket');
-                };
-                
-                ws.onclose = (ev) => {
-                    console.warn('WS closed - reconnect in 3s', ev);
-                    addHistory('⚠️ WebSocket đóng, thử kết nối lại...');
-                    setTimeout(connectWebSocket, 3000);
-                };
-            } catch(e) {
-                console.error('connectWebSocket error', e);
-                addHistory('❌ Lỗi kết nối WebSocket: ' + e.message);
-            }
-        }
-
-        // Cập nhật biểu đồ giá
-        function updateChart() {
-            const labels = priceHistory.map(item => item.time);
-            const data = priceHistory.map(item => item.price);
-            
-            chart.data.labels = labels;
-            chart.data.datasets[0].data = data;
-            chart.update();
-        }
-
-        // Lưu tất cả cấu hình âm thanh
-        function saveAllSoundSettings() {
-            function loadFile(id, setter, key) {
-                const f = document.getElementById(id)?.files[0];
-                if (f) {
-                    const u = URL.createObjectURL(f);
-                    setter(new Audio(u));
-                    localStorage.setItem(key, u);
-                }
-            }
-            
-            loadFile('openSoundInput', a => openSound = a, 'openSound');
-            loadFile('tpSoundInput', a => tpSound = a, 'tpSound');
-            loadFile('slSoundInput', a => slSound = a, 'slSound');
-            loadFile('intersectionSoundInput', a => intersectionSound = a, 'intersectionSound');
-            loadFile('globalNotifySoundInput', a => globalNotifySound = a, 'globalNotifySound');
-
-            useGlobalSound = document.getElementById('useGlobalSound').checked;
-            localStorage.setItem('useGlobalSound', useGlobalSound ? '1' : '0');
-            
-            alert('✅ Đã lưu cấu hình âm thanh');
-            logStatus('🎵 Đã lưu cấu hình âm thanh');
-        }
-
-        function saveAlertSound() {
-            const f = document.getElementById('alertSoundInput')?.files[0];
-            if (f) {
-                const u = URL.createObjectURL(f);
-                alertSound = new Audio(u);
-                localStorage.setItem('alertSound', u);
-                alert("✅ Đã lưu âm thanh cảnh báo!");
-            }
-        }
-
-        // Tải cấu hình âm thanh từ localStorage
-        function loadSoundSettings() {
-            function getAudio(key, def) {
-                const u = localStorage.getItem(key);
-                return u ? new Audio(u) : def;
-            }
-            openSound = getAudio('openSound', openSound);
-            tpSound = getAudio('tpSound', tpSound);
-            slSound = getAudio('slSound', slSound);
-            alertSound = getAudio('alertSound', alertSound);
-            intersectionSound = getAudio('intersectionSound', intersectionSound);
-            globalNotifySound = getAudio('globalNotifySound', globalNotifySound);
-            
-            useGlobalSound = localStorage.getItem('useGlobalSound') === '1';
-            document.getElementById('useGlobalSound').checked = useGlobalSound;
-        }
-
-        // Phát âm thanh thông báo
-        function playNotificationSound(specific) {
-            try {
-                if (useGlobalSound) {
-                    globalNotifySound.currentTime = 0;
-                    globalNotifySound.play();
-                } else if (specific) {
-                    specific.currentTime = 0;
-                    specific.play();
-                }
-            } catch (e) {
-                console.error("Không thể phát âm thanh:", e);
-            }
-        }
-
-        // Cập nhật mốc cảnh báo
-        function updateAlertLevels() {
-            const input = document.getElementById('alertPrices').value;
-            alertLevels = input.split(',')
-                .map(p => parseFloat(p.trim()))
-                .filter(p => !isNaN(p));
-            alertedLevels.clear();
-        }
-
-        // Kiểm tra cảnh báo giá
-        function checkPriceAlerts(oldPrice, newPrice) {
-            if (alertLevels.length === 0 || oldPrice === 0) return;
-
-            alertLevels.forEach(level => {
-                if (alertedLevels.has(level)) return;
-
-                if ((oldPrice < level && newPrice >= level) ||
-                    (oldPrice > level && newPrice <= level)) {
-                    alertedLevels.add(level);
-                    addHistory(`📢 Giá đã cắt qua mốc ${level.toFixed(2)} (hiện tại: ${newPrice.toFixed(2)})`);
-                    playNotificationSound(alertSound);
-                }
-            });
-        }
-
-        // Lưu cài đặt giao dịch
-        function saveTradingSettings() {
-            const settings = {
-                virtualBalance: parseFloat(document.getElementById('virtualBalance').value),
-                leverage: parseInt(document.getElementById('leverage').value),
-                lotSize: parseFloat(document.getElementById('lotSize').value),
-                stopLoss: parseFloat(document.getElementById('stopLoss').value),
-                takeProfit: parseFloat(document.getElementById('takeProfit').value),
-                tradesToday: tradesToday
-            };
-            localStorage.setItem('tradingSettings', JSON.stringify(settings));
-            logStatus('💾 Đã lưu cài đặt giao dịch');
-        }
-
-        // Tải cài đặt giao dịch
-        function loadTradingSettings() {
-            const settings = JSON.parse(localStorage.getItem('tradingSettings'));
-            if (settings) {
-                document.getElementById('virtualBalance').value = settings.virtualBalance;
-                document.getElementById('leverage').value = settings.leverage;
-                document.getElementById('lotSize').value = settings.lotSize;
-                document.getElementById('stopLoss').value = settings.stopLoss;
-                document.getElementById('takeProfit').value = settings.takeProfit;
-                virtualBalance = settings.virtualBalance;
-                tradesToday = settings.tradesToday || 0;
-                updateStatus();
-                logStatus('🔄 Đã tải cài đặt giao dịch từ localStorage');
-            }
-        }
-
-        // Reset dữ liệu về trạng thái ban đầu
-        function resetData() {
-            if (!confirm('Bạn có chắc chắn muốn reset tất cả dữ liệu? Mọi cài đặt và lịch sử sẽ bị xóa!')) return;
-
-            localStorage.removeItem('balanceHistory');
-            localStorage.removeItem('tradingSettings');
-            localStorage.removeItem('openSound');
-            localStorage.removeItem('tpSound');
-            localStorage.removeItem('slSound');
-            localStorage.removeItem('alertSound');
-            localStorage.removeItem('intersectionSound');
-            localStorage.removeItem('globalNotifySound');
-            localStorage.removeItem('useGlobalSound');
-
-            virtualBalance = 1000;
-            tradesToday = 0;
-            balanceHistory = [];
-            currentTrades = [];
-            alertLevels = [];
-            alertedLevels.clear();
-            alertedIntersectionIndices.clear();
-            
-            document.getElementById('virtualBalance').value = 1000;
-            document.getElementById('leverage').value = 10;
-            document.getElementById('lotSize').value = 0.1;
-            document.getElementById('stopLoss').value = 50;
-            document.getElementById('takeProfit').value = 65;
-            document.getElementById('alertPrices').value = '';
-            document.getElementById('useGlobalSound').checked = false;
-            document.getElementById('historyList').innerHTML = '';
-            document.getElementById('activeTrades').style.display = 'none';
-            document.getElementById('currentTradeDetails').innerHTML = '';
-
-            openSound = new Audio('https://www.soundjay.com/buttons/button-21.mp3');
-            tpSound = new Audio('https://www.soundjay.com/buttons/button-09.mp3');
-            slSound = new Audio('https://www.soundjay.com/buttons/button-10.mp3');
-            alertSound = new Audio("https://www.soundjay.com/buttons/sounds/beep-07.mp3");
-            globalNotifySound = new Audio('https://www.soundjay.com/buttons/sounds/beep-07.mp3');
-            intersectionSound = null;
-            useGlobalSound = false;
-
-            updateStatus();
-            drawBalanceChart();
-            logStatus('🔄 Đã reset dữ liệu về trạng thái ban đầu');
-        }
-
-        // Bắt đầu giao dịch tự động
-        function startAutoTrading() {
-            if (autoTradingActive) return;
-            
-            virtualBalance = parseFloat(document.getElementById('virtualBalance').value);
-            autoTradingActive = true;
-            saveTradingSettings();
-            
-            updateStatus();
-            
-            if (currentTrades.length === 0) {
-                const waitForPrice = setInterval(() => {
-                    if (currentPrice > 0) {
-                        clearInterval(waitForPrice);
-                        createNewTrades();
-                    }
-                }, 500);
-            }
-            
-            tradingInterval = setInterval(checkTrades, 1000);
-            logStatus('🚀 Bắt đầu giao dịch tự động');
-        }
-
-        // Dừng giao dịch tự động
-        function stopAutoTrading() {
-            autoTradingActive = false;
-            clearInterval(tradingInterval);
-            saveTradingSettings();
-            updateStatus();
-            logStatus('🛑 Dừng giao dịch tự động');
-        }
-
-        // Tạo lệnh mới
-        function createNewTrades() {
-            if (!autoTradingActive || currentPrice === 0 || virtualBalance < 100) {
-                stopAutoTrading();
-                return;
-            }
-            
-            const price = currentPrice;
-            const sl = parseFloat(document.getElementById('stopLoss').value);
-            const tp = parseFloat(document.getElementById('takeProfit').value);
-            const lotSize = parseFloat(document.getElementById('lotSize').value);
-            const leverage = parseInt(document.getElementById('leverage').value);
-            
-            currentTrades = [
-                {
-                    type: 'BUY',
-                    entryPrice: price,
-                    entryTime: new Date().toLocaleString('vi-VN'),
-                    stopLoss: price - sl,
-                    takeProfit: price + tp,
-                    lotSize,
-                    leverage,
-                    closed: false
-                },
-                {
-                    type: 'SELL',
-                    entryPrice: price,
-                    entryTime: new Date().toLocaleString('vi-VN'),
-                    stopLoss: price + sl,
-                    takeProfit: price - tp,
-                    lotSize,
-                    leverage,
-                    closed: false
-                }
-            ];
-            
-            document.getElementById('activeTrades').style.display = 'block';
-            updateTradeInfo();
-            
-            playNotificationSound(openSound);
-            addHistory(`Mở lệnh BUY @ ${price.toFixed(2)} | SL: ${(price - sl).toFixed(2)} | TP: ${(price + tp).toFixed(2)}`);
-            addHistory(`Mở lệnh SELL @ ${price.toFixed(2)} | SL: ${(price + sl).toFixed(2)} | TP: ${(price - tp).toFixed(2)}`);
-            
-            logStatus(`📈 Mở 2 lệnh mới (BUY/SELL) @ ${price.toFixed(2)}`);
-            saveTradingSettings();
-        }
-
-        // Kiểm tra điều kiện đóng lệnh
-        function checkTrades() {
-            if (!autoTradingActive || currentTrades.length === 0 || isWaitingNewTrades) return;
-            
-            let allClosed = true;
-            
-            currentTrades.forEach(trade => {
-                if (trade.closed) return;
-                
-                allClosed = false;
-                let closeReason = '';
-                
-                if ((trade.type === 'BUY' && currentPrice <= trade.stopLoss) || 
-                    (trade.type === 'SELL' && currentPrice >= trade.stopLoss)) {
-                    closeReason = 'STOP LOSS';
-                } 
-                else if ((trade.type === 'BUY' && currentPrice >= trade.takeProfit) || 
-                         (trade.type === 'SELL' && currentPrice <= trade.takeProfit)) {
-                    closeReason = 'TAKE PROFIT';
-                }
-                
-                if (closeReason) {
-                    closeTrade(trade, currentPrice, closeReason);
-                }
-            });
-            
-            if (allClosed && autoTradingActive) {
-                isWaitingNewTrades = true;
-                updateStatus("Đang chờ tạo lệnh mới...");
-                logStatus('⏳ Đang chờ tạo lệnh mới (3s)');
-                
-                setTimeout(() => {
-                    createNewTrades();
-                    isWaitingNewTrades = false;
-                    updateStatus();
-                }, 3000);
-            }
-        }
-
-        // Đóng lệnh
-        function closeTrade(trade, closePrice, reason) {
-            const profit = trade.type === 'BUY'
-                ? (closePrice - trade.entryPrice) * trade.lotSize * trade.leverage
-                : (trade.entryPrice - closePrice) * trade.lotSize * trade.leverage;
-            
-            trade.closed = true;
-            trade.exitPrice = closePrice;
-            trade.exitTime = new Date().toLocaleString('vi-VN');
-            trade.profit = profit;
-            trade.closeReason = reason;
-            virtualBalance += profit;
-            tradesToday++;
-            
-            balanceHistory.push({
-                time: new Date(),
-                balance: virtualBalance,
-                profit: profit,
-                reason: reason,
-                type: trade.type,
-                entryPrice: trade.entryPrice,
-                closePrice: closePrice,
-                goldPrice: currentPrice,
-                lotSize: trade.lotSize
-            });
-
-            localStorage.setItem('balanceHistory', JSON.stringify(balanceHistory));
-            saveTradingSettings();
-
-            drawBalanceChart();
-
-            if (reason === 'TAKE PROFIT') {
-                playNotificationSound(tpSound);
-            } else if (reason === 'STOP LOSS') {
-                playNotificationSound(slSound);
-            }
-            
-            addHistory(
-                `Đóng lệnh ${trade.type} @ ${closePrice.toFixed(2)} (${reason}) | ` +
-                `Lợi nhuận: <span class="${profit >= 0 ? 'profit' : 'loss'}">${profit.toFixed(2)} USD</span> | ` +
-                `Số dư: ${virtualBalance.toFixed(2)} USD`
-            );
-            
-            updateTradeInfo();
-            updateStatus();
-            
-            logStatus(
-                `📉 Đóng lệnh ${trade.type} (${reason}) | ` +
-                `Lợi nhuận: ${profit.toFixed(2)} USD | ` +
-                `Số dư mới: ${virtualBalance.toFixed(2)} USD`
-            );
-        }
-
-        // Phân tích hiệu suất
-        function analyzeBalanceHistory() {
-            if (!balanceHistory || balanceHistory.length === 0) {
-                alert("Không có dữ liệu giao dịch!");
-                return;
-            }
-
-            let max = balanceHistory[0];
-            let min = balanceHistory[0];
-            let totalProfit = 0;
-            let totalGoldPrice = 0;
-            let tradesCount = balanceHistory.length;
-
-            balanceHistory.forEach(item => {
-                if (item.balance > max.balance) max = item;
-                if (item.balance < min.balance) min = item;
-                totalProfit += item.profit;
-                totalGoldPrice += item.goldPrice;
-            });
-
-            const first = balanceHistory[0];
-            const maxDuration = ((new Date(max.time) - new Date(first.time)) / 1000).toFixed(0);
-            const minDuration = ((new Date(min.time) - new Date(first.time)) / 1000).toFixed(0);
-            const avgProfit = (totalProfit / tradesCount).toFixed(2);
-            const avgGoldPrice = (totalGoldPrice / tradesCount).toFixed(2);
-            const profitToGoldRatio = ((totalProfit / tradesCount) / avgGoldPrice * 100).toFixed(2);
-
-            alert(
-                `📈 Số dư cao nhất: ${max.balance.toFixed(2)} USD lúc ${max.time.toLocaleString()} (Giá vàng: ${max.goldPrice.toFixed(2)} USD)\n` +
-                `⏱️ Mất ${maxDuration} giây kể từ lúc bắt đầu\n\n` +
-                `📉 Số dư thấp nhất: ${min.balance.toFixed(2)} USD lúc ${min.time.toLocaleString()} (Giá vàng: ${min.goldPrice.toFixed(2)} USD)\n` +
-                `⏱️ Mất ${minDuration} giây kể từ lúc bắt đầu\n\n` +
-                `💰 Lợi nhuận trung bình mỗi lệnh: ${avgProfit} USD\n` +
-                `🌟 Giá vàng trung bình: ${avgGoldPrice} USD\n` +
-                `📊 Tỷ lệ lợi nhuận so với giá vàng: ${profitToGoldRatio}%`
-            );
-        }
-
-        // Vẽ biểu đồ số dư và giá vàng
-        function drawBalanceChart() {
-            if (!balanceHistory || balanceHistory.length === 0) {
-                if (balanceChart) balanceChart.destroy();
-                return;
-            }
-            const ctx = document.getElementById('balanceChart').getContext('2d');
-            const labels = balanceHistory.map(item => new Date(item.time).toLocaleTimeString('vi-VN'));
-            const balances = balanceHistory.map(item => item.balance);
-            const goldPrices = balanceHistory.map(item => item.goldPrice);
-
-            if (balanceChart) balanceChart.destroy();
-
-            balanceChart = new Chart(ctx, {
-                type: 'line',
-                data: {
-                    labels: labels,
-                    datasets: [
-                        {
-                            label: 'Số Dư (USD)',
-                            data: balances,
-                            borderColor: '#0ecb81',
-                            backgroundColor: 'rgba(14, 203, 129, 0.1)',
-                            tension: 0.2,
-                            fill: true,
-                            yAxisID: 'y'
-                        },
-                        {
-                            label: 'Giá Vàng (XAU/USD)',
-                            data: goldPrices,
-                            borderColor: '#d4af37',
-                            backgroundColor: 'rgba(212, 175, 55, 0.1)',
-                            tension: 0.2,
-                            fill: false,
-                            yAxisID: 'y1'
-                        }
-                    ]
-                },
-                options: {
-                    responsive: true,
-                    scales: {
-                        y: {
-                            type: 'linear',
-                            display: true,
-                            position: 'left',
-                            title: {
-                                display: true,
-                                text: 'Số Dư (USD)'
-                            }
-                        },
-                        y1: {
-                            type: 'linear',
-                            display: true,
-                            position: 'right',
-                            title: {
-                                display: true,
-                                text: 'Giá Vàng (USD)'
-                            },
-                            grid: {
-                                drawOnChartArea: false
-                            }
-                        }
-                    }
-                }
-            });
-
-            setTimeout(() => {
-                detectBalanceGoldIntersections();
-            }, 100);
-        }
-
-        // Phát hiện giao nhau giữa số dư và giá vàng
-        function detectBalanceGoldIntersections() {
-            if (!balanceChart) return;
-            
-            const dsBalance = balanceChart.data.datasets[0].data;
-            const dsGold = balanceChart.data.datasets[1].data;
-            const scaleL = balanceChart.scales['y'];
-            const scaleR = balanceChart.scales['y1'];
-            
-            if (!scaleL || !scaleR) return;
-            
-            const len = Math.min(dsBalance.length, dsGold.length);
-            
-            for (let i = 1; i < len; i++) {
-                try {
-                    const prevBalPx = scaleL.getPixelForValue(dsBalance[i-1]);
-                    const prevGoldPx = scaleR.getPixelForValue(dsGold[i-1]);
-                    const curBalPx = scaleL.getPixelForValue(dsBalance[i]);
-                    const curGoldPx = scaleR.getPixelForValue(dsGold[i]);
-                    
-                    const prevDiff = prevBalPx - prevGoldPx;
-                    const curDiff = curBalPx - curGoldPx;
-                    
-                    if ((prevDiff === 0 || curDiff === 0) || 
-                        (prevDiff < 0 && curDiff > 0) || 
-                        (prevDiff > 0 && curDiff < 0)) {
-                        
-                        if (!alertedIntersectionIndices.has(i)) {
-                            alertedIntersectionIndices.add(i);
-                            addHistory(`🔔 Giao nhau Số Dư & Giá Vàng tại ${balanceChart.data.labels[i] || ''}`);
-                            
-                            if (intersectionSound) {
-                                playNotificationSound(intersectionSound);
-                            } else {
-                                playNotificationSound(alertSound);
-                            }
-                        }
-                    }
-                } catch(e) {
-                    console.error("Lỗi khi phát hiện giao nhau:", e);
-                }
-            }
-        }
-
-        // Cập nhật thông tin lệnh
-        function updateTradeInfo() {
-            const container = document.getElementById('currentTradeDetails');
-            container.innerHTML = '';
-            
-            currentTrades.forEach(trade => {
-                const price = currentPrice;
-                let profit = 0;
-                let profitClass = '';
-                
-                if (!trade.closed) {
-                    profit = trade.type === 'BUY'
-                        ? (price - trade.entryPrice) * trade.lotSize * trade.leverage
-                        : (trade.entryPrice - price) * trade.lotSize * trade.leverage;
-                    profitClass = profit >= 0 ? 'profit' : 'loss';
-                } else {
-                    profit = trade.profit || 0;
-                    profitClass = profit >= 0 ? 'profit' : 'loss';
-                }
-                
-                const tradeBox = document.createElement('div');
-                tradeBox.className = `trade-box ${trade.type.toLowerCase()}`;
-                tradeBox.innerHTML = `
-                    <h3>${trade.type} ${trade.closed ? '(ĐÃ ĐÓNG)' : '(ĐANG MỞ)'}</h3>
-                    <p>Giá vào: ${trade.entryPrice.toFixed(2)}</p>
-                    <p>Giá hiện tại: ${price.toFixed(2)}</p>
-                    <p>Lợi nhuận: <span class="${profitClass}">${profit.toFixed(2)} USD</span></p>
-                    <p>SL: ${trade.stopLoss.toFixed(2)} | TP: ${trade.takeProfit.toFixed(2)}</p>
-                    ${trade.closed ? `<p>Lý do đóng: ${trade.closeReason}</p>` : ''}
-                `;
-                
-                container.appendChild(tradeBox);
-            });
-        }
-
-        // Cập nhật trạng thái
-        function updateStatus(extra = "") {
-            let status = autoTradingActive ? "Đang giao dịch tự động" : "Đã dừng";
-            if (extra) status += " | " + extra;
-            
-            document.getElementById('statusText').textContent = status;
-            document.getElementById('balanceText').textContent = virtualBalance.toFixed(2);
-            document.getElementById('tradesCount').textContent = tradesToday;
-        }
-
-        // Thêm vào lịch sử
-        function addHistory(message) {
-            const now = new Date();
-            const timeString = now.toLocaleTimeString('vi-VN');
-            
-            const historyList = document.getElementById('historyList');
-            const historyItem = document.createElement('div');
-            historyItem.className = 'history-item';
-            historyItem.innerHTML = `<strong>${timeString}:</strong> ${message}`;
-            
-            historyList.insertBefore(historyItem, historyList.firstChild);
-        }
-
-        // Xóa lịch sử
-        function clearHistory() {
-            document.getElementById('historyList').innerHTML = '';
-            balanceHistory = [];
-            localStorage.removeItem('balanceHistory');
-            drawBalanceChart();
-            saveTradingSettings();
-            logStatus('🧹 Đã xóa lịch sử giao dịch');
-        }
-
-        // Khởi động ứng dụng
-        window.onload = function() {
-            initChart();
-            connectWebSocket();
-            loadSoundSettings();
-            loadTradingSettings();
-            updateStatus();
-            addHistory('🔄 Ứng dụng khởi động');
-            
-            ['virtualBalance', 'leverage', 'lotSize', 'stopLoss', 'takeProfit'].forEach(id => {
-                document.getElementById(id).addEventListener('change', saveTradingSettings);
-            });
-            
-            document.getElementById('alertPrices').addEventListener('change', updateAlertLevels);
-            
-            document.getElementById('useGlobalSound').addEventListener('change', function() {
-                useGlobalSound = this.checked;
-                localStorage.setItem('useGlobalSound', useGlobalSound ? '1' : '0');
-            });
-        };
-    </script>
-
-<!-- FIREBASE REALTIME FULL -->
-<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
-
-<div style="position:fixed;top:10px;right:10px;background:#fff;padding:10px;border-radius:8px;z-index:9999;">
-<button onclick="loginGoogle()">🔐 Login</button>
-<button onclick="logout()">🚪 Logout</button>
-<button onclick="forceSync()">☁️ Sync</button>
-<div id="userBox">Chưa login</div>
+    <!-- Cloud sync control -->
+    <div class="cloud-panel" id="cloudPanel">
+        <div style="font-weight:700;">☁️ ĐỒNG BỘ DỮ LIỆU CLOUD (Firestore)</div>
+        <div class="flex-buttons">
+            <button onclick="uploadToCloud()" style="background:#3b82f6;color:white;">📤 Upload lên Cloud</button>
+            <button onclick="downloadFromCloud()" style="background:#10b981;color:white;">📥 Tải từ Cloud</button>
+            <button onclick="deleteCloudData()" class="danger" style="background:#dc2626;">🗑️ Xóa dữ liệu Cloud</button>
+        </div>
+        <div style="display: flex; align-items: center; gap: 12px;">
+            <label style="width:auto;">⏱️ Tự động upload (phút):</label>
+            <input type="number" id="autoSyncMinutes" value="5" min="1" max="60" style="width:80px;">
+            <button onclick="setAutoUploadInterval()" style="background:#8b5cf6;">⚙️ Đặt & Bắt đầu</button>
+            <button onclick="stopAutoUpload()" class="danger">🛑 Dừng auto</button>
+        </div>
+        <div id="cloudStatus" style="font-size:12px; color:#2c3e66;">🔐 Chưa đăng nhập</div>
+    </div>
+    
+    <div class="panel">
+        <div class="panel-title">📈 Biểu đồ giá XAU/USD</div>
+        <div class="chart-container"><canvas id="priceChart"></canvas></div>
+    </div>
+    <div class="panel">
+        <div class="panel-title">📊 Biểu đồ Số dư & Giá Vàng (giao nhau cảnh báo)</div>
+        <div class="chart-container"><canvas id="balanceChart"></canvas></div>
+    </div>
+    
+    <div id="activeTrades" style="display: none;">
+        <div class="panel-title">📌 Lệnh đang mở</div>
+        <div id="currentTradeDetails"></div>
+    </div>
+    
+    <div class="panel">
+        <div class="panel-title">📜 Lịch sử giao dịch</div>
+        <div id="historyList"></div>
+        <button style="margin-top:12px;" onclick="clearHistory()">🗑️ Xóa lịch sử</button>
+    </div>
 </div>
 
 <script>
-const firebaseConfig = {
-  apiKey: "AIzaSyC3ArgRBdzrj-Njnq6A9KB--9LT45LUNJ8",
-  authDomain: "yt-srt-sync.firebaseapp.com",
-  projectId: "yt-srt-sync",
-};
-
-firebase.initializeApp(firebaseConfig);
-const auth = firebase.auth();
-const db = firebase.firestore();
-
-let currentUser = null;
-let unsubscribeRealtime = null;
-
-function loginGoogle(){
-  const provider = new firebase.auth.GoogleAuthProvider();
-  auth.signInWithPopup(provider);
-}
-
-function logout(){
-  auth.signOut();
-}
-
-auth.onAuthStateChanged(user=>{
-  if(user){
-    currentUser = user;
-    document.getElementById("userBox").innerText = "👤 " + user.email;
-    startRealtimeSync();
-  } else {
-    document.getElementById("userBox").innerText = "Chưa login";
-    currentUser = null;
-    if(unsubscribeRealtime) unsubscribeRealtime();
-  }
-});
-
-// UPLOAD
-function forceSync(){
-  if(!currentUser) return alert("Chưa login");
-  db.collection("users").doc(currentUser.uid).set({
-    balanceHistory: balanceHistory,
-    updatedAt: Date.now()
-  });
-}
-
-// REALTIME SYNC 2 CHIỀU
-function startRealtimeSync(){
-  if(!currentUser) return;
-
-  unsubscribeRealtime = db.collection("users")
-    .doc(currentUser.uid)
-    .onSnapshot(doc=>{
-      if(!doc.exists) return;
-
-      let data = doc.data();
-      if(!data.balanceHistory) return;
-
-      // tránh loop ghi đè
-      if(JSON.stringify(data.balanceHistory) !== JSON.stringify(balanceHistory)){
-        console.log("📥 Sync từ cloud");
-        balanceHistory = data.balanceHistory;
-        localStorage.setItem('balanceHistory', JSON.stringify(balanceHistory));
-        drawBalanceChart();
-      }
+    // ---------- Biến toàn cục ----------
+    const FINNHUB_API_KEY = 'd1l6t99r01qt4thebangd1l6t99r01qt4thebao0';
+    let currentPrice = 0;
+    let priceChart, balanceChartInstance;
+    let ws = null;
+    let autoTradingActive = false;
+    let tradingInterval = null;
+    let virtualBalance = 1000;
+    let tradesToday = 0;
+    let currentTrades = [];
+    let priceHistory = [];
+    let balanceHistory = JSON.parse(localStorage.getItem('balanceHistory')) || [];
+    let isWaitingNewTrades = false;
+    
+    // TRẠNG THÁI NGẮT API
+    let isApiPaused = false;          // true = ngắt kết nối, không nhận giá mới
+    let manualPriceOverride = null;    // nếu ngắt API, người dùng có thể set tay nhưng hiện tại chưa cần
+    
+    // Âm thanh
+    let openSound = new Audio('https://www.soundjay.com/buttons/button-21.mp3');
+    let tpSound = new Audio('https://www.soundjay.com/buttons/button-09.mp3');
+    let slSound = new Audio('https://www.soundjay.com/buttons/button-10.mp3');
+    let alertSound = new Audio("https://www.soundjay.com/buttons/sounds/beep-07.mp3");
+    let intersectionSound = null;
+    let globalNotifySound = new Audio('https://www.soundjay.com/buttons/sounds/beep-07.mp3');
+    let useGlobalSound = false;
+    
+    let alertLevels = [];
+    let alertedLevels = new Set();
+    let alertedIntersectionIndices = new Set();
+    
+    // Firebase
+    const firebaseConfig = {
+      apiKey: "AIzaSyC3ArgRBdzrj-Njnq6A9KB--9LT45LUNJ8",
+      authDomain: "yt-srt-sync.firebaseapp.com",
+      projectId: "yt-srt-sync",
+    };
+    firebase.initializeApp(firebaseConfig);
+    const auth = firebase.auth();
+    const db = firebase.firestore();
+    let currentUser = null;
+    let unsubscribeRealtime = null;
+    let autoUploadIntervalId = null;
+    
+    // Helper UI
+    function updateUI() {
+        document.getElementById('balanceText').innerText = virtualBalance.toFixed(2);
+        document.getElementById('tradesCount').innerText = tradesToday;
+        document.getElementById('statusText').innerHTML = autoTradingActive ? "✅ Đang giao dịch tự động" : "⏸️ Dừng";
+        const apiBadge = document.getElementById('apiStatusBadge');
+        if(isApiPaused) {
+            apiBadge.innerHTML = "⛔ API: ĐÃ NGẮT (tạm dừng giá)";
+            apiBadge.style.backgroundColor = "#dc2626";
+        } else {
+            apiBadge.innerHTML = "📡 API: Đang nhận giá vàng";
+            apiBadge.style.backgroundColor = "#10b981";
+        }
+    }
+    
+    function addHistory(msg) {
+        const div = document.getElementById('historyList');
+        const item = document.createElement('div');
+        item.className = 'history-item';
+        item.innerHTML = `<strong>${new Date().toLocaleTimeString('vi-VN')}:</strong> ${msg}`;
+        div.prepend(item);
+        if(div.children.length > 200) div.removeChild(div.lastChild);
+    }
+    
+    function logStatus(msg) { console.log(msg); addHistory(msg); }
+    
+    // ------------------- WEBSOCKET (có hỗ trợ ngắt/bật) -------------------
+    function connectWebSocket() {
+        if(ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) {
+            if(isApiPaused) {
+                // Nếu đang ngắt API mà ws vẫn mở => đóng để thực sự ngắt
+                if(ws.readyState === WebSocket.OPEN) {
+                    ws.close();
+                    logStatus("🔌 API ngắt: Đã đóng kết nối WebSocket theo yêu cầu");
+                }
+            }
+            return;
+        }
+        if(isApiPaused) {
+            logStatus("⛔ API đang ở chế độ ngắt, không kết nối WebSocket");
+            return;
+        }
+        ws = new WebSocket(`wss://ws.finnhub.io?token=${FINNHUB_API_KEY}`);
+        ws.onopen = () => {
+            ws.send(JSON.stringify({type:'subscribe', symbol:'OANDA:XAU_USD'}));
+            logStatus('🔌 WebSocket kết nối - nhận giá vàng (API hoạt động)');
+        };
+        ws.onmessage = (ev) => {
+            if(isApiPaused) return; // không xử lý giá khi đang ngắt
+            try {
+                const data = JSON.parse(ev.data);
+                if(data.type === 'trade' && data.data && data.data.length){
+                    const last = data.data[data.data.length-1];
+                    if(last && last.p){
+                        const old = currentPrice;
+                        currentPrice = parseFloat(last.p);
+                        document.getElementById('currentPrice').innerHTML = currentPrice.toFixed(2);
+                        priceHistory.push({time: new Date().toLocaleTimeString('vi-VN'), price: currentPrice});
+                        if(priceHistory.length > 200) priceHistory.shift();
+                        updatePriceChart();
+                        drawBalanceChart();
+                        checkPriceAlerts(old, currentPrice);
+                        if(autoTradingActive && currentTrades.length) updateTradeInfoDisplay();
+                    }
+                }
+            } catch(e){}
+        };
+        ws.onclose = () => { 
+            if(!isApiPaused) setTimeout(connectWebSocket, 3000); 
+        };
+        ws.onerror = (err) => { console.warn("WS error", err); };
+    }
+    
+    // Hàm toggle ngắt/bật API
+    function toggleApiConnection() {
+        isApiPaused = !isApiPaused;
+        if(isApiPaused) {
+            // Ngắt: đóng WebSocket nếu đang mở
+            if(ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) {
+                ws.close();
+                ws = null;
+            }
+            addHistory("🔴 ĐÃ NGẮT API GIÁ VÀNG: không nhận cập nhật giá mới.");
+            logStatus("⚠️ Người dùng ngắt kết nối API giá vàng");
+        } else {
+            // Bật lại: khởi tạo lại kết nối
+            addHistory("🟢 BẬT LẠI API: bắt đầu nhận giá vàng thời gian thực.");
+            connectWebSocket();
+        }
+        updateUI();
+        // Cập nhật nút giao diện
+        const toggleBtn = document.getElementById('toggleApiBtn');
+        if(isApiPaused) {
+            toggleBtn.innerHTML = "🔌 BẬT API GIÁ";
+            toggleBtn.style.background = "#10b981";
+            toggleBtn.classList.remove("warning");
+        } else {
+            toggleBtn.innerHTML = "⛔ NGẮT API GIÁ";
+            toggleBtn.style.background = "#f97316";
+            toggleBtn.classList.add("warning");
+        }
+    }
+    
+    function updatePriceChart() {
+        if(!priceChart) return;
+        priceChart.data.labels = priceHistory.map(p=>p.time);
+        priceChart.data.datasets[0].data = priceHistory.map(p=>p.price);
+        priceChart.update();
+    }
+    
+    function initPriceChart() {
+        const ctx = document.getElementById('priceChart').getContext('2d');
+        priceChart = new Chart(ctx, {
+            type: 'line',
+            data: { labels: [], datasets: [{ label: 'XAU/USD', data: [], borderColor: '#eab308', fill: true, backgroundColor: 'rgba(234,179,8,0.1)' }] },
+            options: { responsive: true, maintainAspectRatio: false }
+        });
+    }
+    
+    function drawBalanceChart() {
+        const ctx = document.getElementById('balanceChart').getContext('2d');
+        if(balanceChartInstance) balanceChartInstance.destroy();
+        if(!balanceHistory.length) return;
+        const labels = balanceHistory.map(h => new Date(h.time).toLocaleTimeString('vi-VN'));
+        const balances = balanceHistory.map(h => h.balance);
+        const golds = balanceHistory.map(h => h.goldPrice);
+        balanceChartInstance = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: labels,
+                datasets: [
+                    { label: 'Số dư (USD)', data: balances, borderColor: '#10b981', backgroundColor: 'rgba(16,185,129,0.05)', tension: 0.2, yAxisID: 'y' },
+                    { label: 'Giá Vàng (USD)', data: golds, borderColor: '#eab308', borderWidth: 2, fill: false, yAxisID: 'y1' }
+                ]
+            },
+            options: {
+                responsive: true, maintainAspectRatio: false,
+                scales: { y: { title: { display: true, text: 'Số dư USD' } }, y1: { position: 'right', title: { text: 'Giá Vàng' }, grid: { drawOnChartArea: false } } }
+            }
+        });
+        setTimeout(() => detectCrossAndSync(), 150);
+    }
+    
+    function detectCrossAndSync() {
+        if(!balanceChartInstance || balanceHistory.length < 2) return;
+        const balances = balanceChartInstance.data.datasets[0].data;
+        const golds = balanceChartInstance.data.datasets[1].data;
+        const len = Math.min(balances.length, golds.length);
+        for(let i=1; i<len; i++) {
+            const prevDiff = balances[i-1] - golds[i-1];
+            const curDiff = balances[i] - golds[i];
+            if((prevDiff < 0 && curDiff > 0) || (prevDiff > 0 && curDiff < 0) || prevDiff === 0 || curDiff === 0) {
+                if(!alertedIntersectionIndices.has(i)){
+                    alertedIntersectionIndices.add(i);
+                    addHistory(`🔁 GIAO NHAU: Số dư & giá vàng tại ${balanceChartInstance.data.labels[i]}`);
+                    if(intersectionSound) playNotifySound(intersectionSound);
+                    else playNotifySound(alertSound);
+                    if(currentUser) { uploadToCloudSilent(); addHistory("☁️ Tự động sync lên Cloud do giao nhau"); }
+                }
+            }
+        }
+    }
+    
+    function playNotifySound(soundObj) {
+        try {
+            if(useGlobalSound && globalNotifySound) { globalNotifySound.currentTime=0; globalNotifySound.play(); }
+            else if(soundObj) { soundObj.currentTime=0; soundObj.play(); }
+        } catch(e){}
+    }
+    
+    function checkPriceAlerts(oldP, newP) {
+        if(!alertLevels.length || oldP===0) return;
+        for(let lvl of alertLevels){
+            if(alertedLevels.has(lvl)) continue;
+            if((oldP < lvl && newP >= lvl) || (oldP > lvl && newP <= lvl)){
+                alertedLevels.add(lvl);
+                addHistory(`🔔 Giá chạm mốc ${lvl.toFixed(2)}`);
+                playNotifySound(alertSound);
+            }
+        }
+    }
+    
+    function createNewTrades() {
+        if(!autoTradingActive || currentPrice===0 || virtualBalance < 100) return;
+        const slVal = parseFloat(document.getElementById('stopLoss').value);
+        const tpVal = parseFloat(document.getElementById('takeProfit').value);
+        const lot = parseFloat(document.getElementById('lotSize').value);
+        const lev = parseInt(document.getElementById('leverage').value);
+        const price = currentPrice;
+        currentTrades = [
+            { type:'BUY', entryPrice:price, entryTime:new Date().toLocaleString(), stopLoss:price - slVal, takeProfit:price + tpVal, lotSize:lot, leverage:lev, closed:false, profitCalc:0 },
+            { type:'SELL', entryPrice:price, entryTime:new Date().toLocaleString(), stopLoss:price + slVal, takeProfit:price - tpVal, lotSize:lot, leverage:lev, closed:false, profitCalc:0 }
+        ];
+        document.getElementById('activeTrades').style.display = 'block';
+        updateTradeInfoDisplay();
+        playNotifySound(openSound);
+        addHistory(`🟢 Mở BUY @${price.toFixed(2)} | SL:${(price-slVal).toFixed(2)} TP:${(price+tpVal).toFixed(2)}`);
+        addHistory(`🔴 Mở SELL @${price.toFixed(2)} | SL:${(price+slVal).toFixed(2)} TP:${(price-tpVal).toFixed(2)}`);
+    }
+    
+    function updateTradeInfoDisplay() {
+        const container = document.getElementById('currentTradeDetails');
+        if(!container) return;
+        container.innerHTML = '';
+        for(let t of currentTrades){
+            let profit = 0;
+            if(!t.closed){
+                profit = t.type === 'BUY' ? (currentPrice - t.entryPrice)*t.lotSize*t.leverage : (t.entryPrice - currentPrice)*t.lotSize*t.leverage;
+            } else profit = t.profit || 0;
+            const cls = profit>=0 ? 'profit' : 'loss';
+            const div = document.createElement('div');
+            div.className = `trade-box ${t.type.toLowerCase()}`;
+            div.innerHTML = `<strong>${t.type} ${t.closed ? '(ĐÃ ĐÓNG)' : 'MỞ'}</strong><br>Vào: ${t.entryPrice.toFixed(2)} | Hiện: ${currentPrice.toFixed(2)}<br>Lợi nhuận: <span class="${cls}">${profit.toFixed(2)} USD</span><br>SL:${t.stopLoss.toFixed(2)} TP:${t.takeProfit.toFixed(2)}`;
+            container.appendChild(div);
+        }
+    }
+    
+    function checkTrades() {
+        if(!autoTradingActive || currentTrades.length===0 || isWaitingNewTrades) return;
+        let allClosed = true;
+        for(let i=0; i<currentTrades.length; i++){
+            const t = currentTrades[i];
+            if(t.closed) continue;
+            allClosed = false;
+            let reason = '';
+            if((t.type === 'BUY' && currentPrice <= t.stopLoss) || (t.type === 'SELL' && currentPrice >= t.stopLoss)) reason = 'STOP LOSS';
+            else if((t.type === 'BUY' && currentPrice >= t.takeProfit) || (t.type === 'SELL' && currentPrice <= t.takeProfit)) reason = 'TAKE PROFIT';
+            if(reason){
+                const profit = t.type === 'BUY' ? (currentPrice - t.entryPrice)*t.lotSize*t.leverage : (t.entryPrice - currentPrice)*t.lotSize*t.leverage;
+                t.closed = true;
+                t.exitPrice = currentPrice;
+                t.profit = profit;
+                virtualBalance += profit;
+                tradesToday++;
+                const record = { time:new Date(), balance:virtualBalance, profit:profit, reason:reason, type:t.type, entryPrice:t.entryPrice, closePrice:currentPrice, goldPrice:currentPrice, lotSize:t.lotSize };
+                balanceHistory.push(record);
+                localStorage.setItem('balanceHistory', JSON.stringify(balanceHistory));
+                saveTradingSettings();
+                drawBalanceChart();
+                if(reason === 'TAKE PROFIT') playNotifySound(tpSound);
+                else playNotifySound(slSound);
+                addHistory(`🏁 Đóng ${t.type} ${reason} @${currentPrice.toFixed(2)} | Lợi nhuận ${profit>=0?'+':''}${profit.toFixed(2)} | Dư: ${virtualBalance.toFixed(2)}`);
+                updateTradeInfoDisplay();
+                updateUI();
+            }
+        }
+        if(allClosed && autoTradingActive && !isWaitingNewTrades){
+            isWaitingNewTrades = true;
+            setTimeout(() => { createNewTrades(); isWaitingNewTrades=false; }, 3000);
+        }
+        updateUI();
+    }
+    
+    function startAutoTrading(){
+        if(autoTradingActive) return;
+        autoTradingActive = true;
+        virtualBalance = parseFloat(document.getElementById('virtualBalance').value);
+        saveTradingSettings();
+        if(currentTrades.length===0 && currentPrice>0) createNewTrades();
+        if(tradingInterval) clearInterval(tradingInterval);
+        tradingInterval = setInterval(checkTrades, 1000);
+        updateUI();
+        logStatus('🚀 Khởi động bot giao dịch');
+    }
+    
+    function stopAutoTrading(){
+        autoTradingActive = false;
+        if(tradingInterval) clearInterval(tradingInterval);
+        updateUI();
+        logStatus('⏸️ Dừng bot');
+    }
+    
+    function saveTradingSettings(){
+        const settings = { virtualBalance, leverage:parseInt(document.getElementById('leverage').value), lotSize:parseFloat(document.getElementById('lotSize').value), stopLoss:parseFloat(document.getElementById('stopLoss').value), takeProfit:parseFloat(document.getElementById('takeProfit').value), tradesToday };
+        localStorage.setItem('tradingSettings', JSON.stringify(settings));
+    }
+    function loadTradingSettings(){
+        const s = localStorage.getItem('tradingSettings');
+        if(s){
+            const o = JSON.parse(s);
+            virtualBalance = o.virtualBalance; tradesToday = o.tradesToday || 0;
+            document.getElementById('virtualBalance').value = virtualBalance;
+            document.getElementById('leverage').value = o.leverage;
+            document.getElementById('lotSize').value = o.lotSize;
+            document.getElementById('stopLoss').value = o.stopLoss;
+            document.getElementById('takeProfit').value = o.takeProfit;
+            updateUI();
+        }
+    }
+    function analyzeBalanceHistory(){
+        if(!balanceHistory.length) return alert('Chưa có lịch sử');
+        let maxB = balanceHistory[0], minB = balanceHistory[0];
+        let totalProfit=0;
+        for(let h of balanceHistory){ if(h.balance>maxB.balance) maxB=h; if(h.balance<minB.balance) minB=h; totalProfit+=h.profit; }
+        alert(`📊 Hiệu suất:\nMax dư: ${maxB.balance.toFixed(2)} USD\nMin dư: ${minB.balance.toFixed(2)} USD\nTổng lợi nhuận: ${totalProfit.toFixed(2)} USD\nSố lệnh: ${balanceHistory.length}`);
+    }
+    function resetData(){
+        if(confirm('Reset toàn bộ dữ liệu? Mất lịch sử và cài đặt âm thanh')) {
+            localStorage.clear();
+            balanceHistory = []; virtualBalance=1000; tradesToday=0; currentTrades=[];
+            localStorage.setItem('balanceHistory', JSON.stringify(balanceHistory));
+            loadTradingSettings(); drawBalanceChart(); updateUI();
+            document.getElementById('historyList').innerHTML='';
+            document.getElementById('activeTrades').style.display='none';
+            logStatus('🔄 Reset thành công');
+        }
+    }
+    function clearHistory(){ balanceHistory=[]; localStorage.setItem('balanceHistory','[]'); drawBalanceChart(); addHistory('Đã xóa lịch sử'); }
+    
+    // Cloud functions
+    function uploadToCloud(){ if(!currentUser) { alert("Đăng nhập Google!"); return; } db.collection("users").doc(currentUser.uid).set({ balanceHistory: balanceHistory, updatedAt: Date.now() }).then(()=>{ addHistory("✅ Upload lên Cloud thành công!"); }).catch(e=>alert(e.message)); }
+    function uploadToCloudSilent(){ if(currentUser) db.collection("users").doc(currentUser.uid).set({ balanceHistory: balanceHistory, updatedAt: Date.now() }).catch(e=>console.warn); }
+    function downloadFromCloud(){ if(!currentUser) { alert("Đăng nhập"); return; } db.collection("users").doc(currentUser.uid).get().then(doc=>{ if(doc.exists && doc.data().balanceHistory){ balanceHistory = doc.data().balanceHistory; localStorage.setItem('balanceHistory', JSON.stringify(balanceHistory)); drawBalanceChart(); addHistory("📥 Tải từ Cloud thành công!"); } else addHistory("⚠️ Cloud trống"); }).catch(e=>alert(e)); }
+    function deleteCloudData(){ if(!currentUser) return; if(confirm("XÓA CLOUD?")) db.collection("users").doc(currentUser.uid).delete().then(()=>addHistory("🗑️ Xóa cloud thành công")); }
+    function setAutoUploadInterval(){ if(!currentUser){ alert("Đăng nhập"); return; } let minutes=parseInt(document.getElementById('autoSyncMinutes').value); if(autoUploadIntervalId) clearInterval(autoUploadIntervalId); autoUploadIntervalId = setInterval(()=>{ if(currentUser && balanceHistory.length) uploadToCloudSilent(); }, minutes*60*1000); addHistory(`⚙️ Tự động upload mỗi ${minutes} phút`); }
+    function stopAutoUpload(){ if(autoUploadIntervalId) clearInterval(autoUploadIntervalId); autoUploadIntervalId=null; addHistory("🛑 Dừng auto upload"); }
+    
+    // Âm thanh & Alert
+    function saveAllSoundSettings(){
+        const map = { openSoundInput:(a)=>openSound=a, tpSoundInput:(a)=>tpSound=a, slSoundInput:(a)=>slSound=a, intersectionSoundInput:(a)=>intersectionSound=a, globalNotifySoundInput:(a)=>globalNotifySound=a };
+        for(let [id,set] of Object.entries(map)){ const file = document.getElementById(id)?.files[0]; if(file) set(new Audio(URL.createObjectURL(file))); }
+        useGlobalSound = document.getElementById('useGlobalSound').checked;
+        localStorage.setItem('useGlobalSound', useGlobalSound);
+        addHistory('🎵 Âm thanh đã lưu');
+    }
+    function saveAlertSound(){ const f = document.getElementById('alertSoundInput').files[0]; if(f) alertSound = new Audio(URL.createObjectURL(f)); }
+    function loadSoundSettings(){ useGlobalSound = localStorage.getItem('useGlobalSound') === 'true'; document.getElementById('useGlobalSound').checked = useGlobalSound; }
+    function updateAlertLevels(){ const txt = document.getElementById('alertPrices').value; alertLevels = txt.split(',').map(v=>parseFloat(v.trim())).filter(v=>!isNaN(v)); alertedLevels.clear(); }
+    
+    // Auth
+    function loginGoogle(){ auth.signInWithPopup(new firebase.auth.GoogleAuthProvider()); }
+    function logout(){ auth.signOut(); }
+    auth.onAuthStateChanged(user=>{
+        currentUser = user;
+        const box = document.getElementById('cloudStatus');
+        if(user){
+            box.innerHTML = `✅ ${user.email} | Cloud sẵn sàng`;
+            if(unsubscribeRealtime) unsubscribeRealtime();
+            unsubscribeRealtime = db.collection("users").doc(user.uid).onSnapshot(doc=>{
+                if(doc.exists && doc.data().balanceHistory){
+                    let remote = doc.data().balanceHistory;
+                    if(JSON.stringify(remote) !== JSON.stringify(balanceHistory)){
+                        balanceHistory = remote;
+                        localStorage.setItem('balanceHistory', JSON.stringify(balanceHistory));
+                        drawBalanceChart();
+                        addHistory("🔄 Đồng bộ realtime từ Cloud");
+                    }
+                }
+            });
+        } else { box.innerHTML = "🔐 Chưa đăng nhập, login để dùng Cloud"; if(unsubscribeRealtime) unsubscribeRealtime(); }
     });
-}
-
-// AUTO SYNC KHI GIAO NHAU
-function autoSyncIfIntersect(){
-  if(balanceHistory.length < 2 || !currentUser) return;
-
-  let a = balanceHistory[balanceHistory.length-2];
-  let b = balanceHistory[balanceHistory.length-1];
-
-  if((a.balance < a.goldPrice && b.balance >= b.goldPrice) ||
-     (a.balance > a.goldPrice && b.balance <= b.goldPrice)){
-       console.log("🔥 Giao nhau → auto sync realtime");
-       forceSync();
-  }
-}
-
-// HOOK
-const oldDraw2 = drawBalanceChart;
-drawBalanceChart = function(){
-  oldDraw2();
-  autoSyncIfIntersect();
-}
+    
+    window.onload = ()=>{
+        initPriceChart();
+        connectWebSocket();
+        loadTradingSettings();
+        loadSoundSettings();
+        updateAlertLevels();
+        document.getElementById('alertPrices').addEventListener('change', updateAlertLevels);
+        updateUI();
+        drawBalanceChart();
+        // Gán nút toggle
+        const toggleBtn = document.getElementById('toggleApiBtn');
+        toggleBtn.onclick = toggleApiConnection;
+        // expose global
+        window.loginGoogle = loginGoogle; window.logout = logout; window.uploadToCloud = uploadToCloud; window.downloadFromCloud = downloadFromCloud;
+        window.deleteCloudData = deleteCloudData; window.setAutoUploadInterval = setAutoUploadInterval; window.stopAutoUpload = stopAutoUpload;
+        window.startAutoTrading = startAutoTrading; window.stopAutoTrading = stopAutoTrading; window.analyzeBalanceHistory = analyzeBalanceHistory;
+        window.resetData = resetData; window.clearHistory = clearHistory; window.saveAllSoundSettings = saveAllSoundSettings; window.saveAlertSound = saveAlertSound;
+    };
 </script>
-
 </body>
 </html>
-
